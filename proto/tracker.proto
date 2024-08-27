@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package="./tracker/pb"; 
+
+message RequestBody {
+  string name = 1;
+}
+
+message ResponseBody {
+  string greet =1;
+}
+
+service TrackerService {
+  rpc HelloWorld(RequestBody) returns (ResponseBody) {};
+}
