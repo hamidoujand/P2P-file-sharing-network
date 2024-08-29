@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package="./pb"; 
+
+message RequestBody {
+  string name = 1;
+}
+
+message ResponseBody {
+  string greet =1;
+}
+
+service PeerService {
+  rpc HelloWorld(RequestBody) returns (ResponseBody) {};
+}

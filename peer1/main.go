@@ -8,11 +8,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/hamidoujand/P2P-file-sharing-network/tracker/pb"
-	"github.com/hamidoujand/P2P-file-sharing-network/tracker/peerstore"
-	"github.com/hamidoujand/P2P-file-sharing-network/tracker/service"
+	"github.com/hamidoujand/P2P-file-sharing-network/peer1/pb"
 	"google.golang.org/grpc"
 )
+
+type service struct {
+	pb.UnimplementedPeerServiceServer
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -22,18 +24,13 @@ func main() {
 }
 
 func run() error {
-	listener, err := net.Listen("tcp", ":50051")
+	listener, err := net.Listen("tcp", ":50052")
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 
-	//==========================================================================
-	//peers store
-	store := peerstore.New()
-	service := service.New(store)
-
 	server := grpc.NewServer()
-	pb.RegisterTrackerServiceServer(server, service)
+	pb.RegisterPeerServiceServer(server, &service{})
 
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, syscall.SIGTERM, syscall.SIGINT)
@@ -41,7 +38,7 @@ func run() error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		log.Println("tracker listening on:", listener.Addr())
+		log.Println("peer1 listening on:", listener.Addr())
 		errCh <- server.Serve(listener)
 	}()
 
@@ -49,7 +46,6 @@ func run() error {
 	case err := <-errCh:
 		return fmt.Errorf("serve: %w", err)
 	case <-shutdownCh:
-		//gracefull
 		server.GracefulStop()
 		return nil
 	}
