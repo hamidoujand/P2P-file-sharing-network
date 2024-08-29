@@ -2,8 +2,6 @@ package peerstore
 
 import (
 	"errors"
-	"net"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -22,6 +20,11 @@ type FileMetadata struct {
 // Files is a collection of file metadata.
 type Files map[string]FileMetadata
 
+type Peer struct {
+	Host  string
+	Files []FileMetadata
+}
+
 // Store represents the in memory storage used to store peers and their files.
 type Store struct {
 	mu    sync.RWMutex
@@ -36,27 +39,61 @@ func New() *Store {
 }
 
 // RegisterPeer adds a new peer with its files into the store.
-func (p *Store) RegisterPeer(ip string, port uint32, files []FileMetadata) {
+func (p *Store) RegisterPeer(host string, files []FileMetadata) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	portString := strconv.Itoa(int(port))
-	peerName := net.JoinHostPort(ip, portString)
 
-	p.store[peerName] = make(Files, len(files))
+	p.store[host] = make(Files, len(files))
 	for _, file := range files {
-		p.store[peerName][file.Name] = file
+		p.store[host][file.Name] = file
 	}
 }
 
 // GetPeerByHost will return the peer files in case peer found, otherwise returns
 // ErrPeerNotFound.
-func (s *Store) GetPeerByHost(ip string, port uint32) (Files, error) {
+func (s *Store) GetPeerByHost(host string) (Files, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	key := net.JoinHostPort(ip, strconv.Itoa(int(port)))
-	peer, ok := s.store[key]
+
+	peer, ok := s.store[host]
 	if !ok {
 		return nil, ErrPeerNotFound
 	}
 	return peer, nil
+}
+
+// RemovePeerByHost will remove a peer from store, or return ErrPeerNotFound.
+func (s *Store) RemovePeerByHost(host string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.store[host]; !ok {
+		return ErrPeerNotFound
+	}
+
+	delete(s.store, host)
+
+	return nil
+}
+
+// GetAllPeers collects all peers that store has and returns them.
+func (s *Store) GetAllPeers() []Peer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	peers := make([]Peer, 0, len(s.store))
+
+	for k, v := range s.store {
+		files := make([]FileMetadata, 0, len(v))
+
+		for _, file := range v {
+			files = append(files, file)
+		}
+		peer := Peer{
+			Host:  k,
+			Files: files,
+		}
+		peers = append(peers, peer)
+	}
+	return peers
 }

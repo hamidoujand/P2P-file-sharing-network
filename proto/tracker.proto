@@ -3,11 +3,21 @@ syntax = "proto3";
 
 package proto;
 
+import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 
 
 option go_package="./tracker/pb"; 
+
+
+
+service TrackerService {
+  rpc RegisterPeer(RegisterPeerRequest) returns (RegisterPeerResponse);
+  rpc UnRegisterPeer(UnRegisterPeerRequest) returns (UnRegisterPeerResponse);
+  rpc GetPeers(google.protobuf.Empty) returns (GetPeersResponse);
+}
+
 
 message File {
   string name = 1;       
@@ -17,9 +27,9 @@ message File {
   string file_type = 5;       
 }
 
+
 message RegisterPeerRequest{
-  string ip=1;
-  uint32 port=2;
+  string host=1;
   repeated File files=3;
 }
 
@@ -28,6 +38,20 @@ message RegisterPeerResponse{
   string message=2; 
 }
 
-service TrackerService {
-  rpc RegisterPeer(RegisterPeerRequest) returns (RegisterPeerResponse);
+message UnRegisterPeerRequest{
+  string host=1;
+}
+
+message UnRegisterPeerResponse{
+  uint32 status_code=1;
+  string message=2;
+}
+
+message GetPeersResponse{
+  repeated Peer peers=1;
+}
+
+message Peer{
+  string host=1;
+  repeated File files=2;
 }
