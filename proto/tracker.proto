@@ -16,7 +16,10 @@ service TrackerService {
   rpc RegisterPeer(RegisterPeerRequest) returns (RegisterPeerResponse);
   rpc UnRegisterPeer(UnRegisterPeerRequest) returns (UnRegisterPeerResponse);
   rpc GetPeers(google.protobuf.Empty) returns (GetPeersResponse);
+  rpc GetPeersForFile(GetPeersForFileRequest) returns (GetPeersResponse);
+  rpc UpdatePeer(UpdatePeerRequest) returns (UpdatePeerResponse);
 }
+
 
 
 message File {
@@ -27,6 +30,19 @@ message File {
   string file_type = 5;       
 }
 
+
+message GetPeersForFileRequest{
+  File file=1;
+};
+
+message UpdatePeerRequest{
+  repeated File files=1;
+  string host=2;
+}
+message UpdatePeerResponse{
+  uint32 status_code=1;
+  string message=2;
+}
 
 message RegisterPeerRequest{
   string host=1;

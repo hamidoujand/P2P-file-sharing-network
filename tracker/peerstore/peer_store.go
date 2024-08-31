@@ -97,3 +97,36 @@ func (s *Store) GetAllPeers() []Peer {
 	}
 	return peers
 }
+
+// GetPeersForFile will return the list of peers that have the requested file.
+func (s *Store) GetPeersForFile(file FileMetadata) []Peer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var peers []Peer
+
+	for host, files := range s.store {
+		if meta, ok := files[file.Name]; ok {
+			//additional checks
+			if meta.Mime == file.Mime && meta.Size == file.Size && meta.Checksum == file.Checksum {
+				var p Peer
+				p.Host = host
+				p.Files = append(p.Files, meta)
+				peers = append(peers, p)
+			}
+		}
+	}
+
+	return peers
+}
+
+// UpdatePeer will update files for a peer.
+func (s *Store) UpdatePeer(host string, updates []FileMetadata) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	updatedFiles := make(Files, len(updates))
+
+	for _, update := range updates {
+		updatedFiles[update.Name] = update
+	}
+	s.store[host] = updatedFiles
+}

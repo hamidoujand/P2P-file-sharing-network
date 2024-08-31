@@ -20,9 +20,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TrackerService_RegisterPeer_FullMethodName   = "/proto.TrackerService/RegisterPeer"
-	TrackerService_UnRegisterPeer_FullMethodName = "/proto.TrackerService/UnRegisterPeer"
-	TrackerService_GetPeers_FullMethodName       = "/proto.TrackerService/GetPeers"
+	TrackerService_RegisterPeer_FullMethodName    = "/proto.TrackerService/RegisterPeer"
+	TrackerService_UnRegisterPeer_FullMethodName  = "/proto.TrackerService/UnRegisterPeer"
+	TrackerService_GetPeers_FullMethodName        = "/proto.TrackerService/GetPeers"
+	TrackerService_GetPeersForFile_FullMethodName = "/proto.TrackerService/GetPeersForFile"
+	TrackerService_UpdatePeer_FullMethodName      = "/proto.TrackerService/UpdatePeer"
 )
 
 // TrackerServiceClient is the client API for TrackerService service.
@@ -32,6 +34,8 @@ type TrackerServiceClient interface {
 	RegisterPeer(ctx context.Context, in *RegisterPeerRequest, opts ...grpc.CallOption) (*RegisterPeerResponse, error)
 	UnRegisterPeer(ctx context.Context, in *UnRegisterPeerRequest, opts ...grpc.CallOption) (*UnRegisterPeerResponse, error)
 	GetPeers(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetPeersResponse, error)
+	GetPeersForFile(ctx context.Context, in *GetPeersForFileRequest, opts ...grpc.CallOption) (*GetPeersResponse, error)
+	UpdatePeer(ctx context.Context, in *UpdatePeerRequest, opts ...grpc.CallOption) (*UpdatePeerResponse, error)
 }
 
 type trackerServiceClient struct {
@@ -72,6 +76,26 @@ func (c *trackerServiceClient) GetPeers(ctx context.Context, in *empty.Empty, op
 	return out, nil
 }
 
+func (c *trackerServiceClient) GetPeersForFile(ctx context.Context, in *GetPeersForFileRequest, opts ...grpc.CallOption) (*GetPeersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPeersResponse)
+	err := c.cc.Invoke(ctx, TrackerService_GetPeersForFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *trackerServiceClient) UpdatePeer(ctx context.Context, in *UpdatePeerRequest, opts ...grpc.CallOption) (*UpdatePeerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdatePeerResponse)
+	err := c.cc.Invoke(ctx, TrackerService_UpdatePeer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TrackerServiceServer is the server API for TrackerService service.
 // All implementations must embed UnimplementedTrackerServiceServer
 // for forward compatibility.
@@ -79,6 +103,8 @@ type TrackerServiceServer interface {
 	RegisterPeer(context.Context, *RegisterPeerRequest) (*RegisterPeerResponse, error)
 	UnRegisterPeer(context.Context, *UnRegisterPeerRequest) (*UnRegisterPeerResponse, error)
 	GetPeers(context.Context, *empty.Empty) (*GetPeersResponse, error)
+	GetPeersForFile(context.Context, *GetPeersForFileRequest) (*GetPeersResponse, error)
+	UpdatePeer(context.Context, *UpdatePeerRequest) (*UpdatePeerResponse, error)
 	mustEmbedUnimplementedTrackerServiceServer()
 }
 
@@ -97,6 +123,12 @@ func (UnimplementedTrackerServiceServer) UnRegisterPeer(context.Context, *UnRegi
 }
 func (UnimplementedTrackerServiceServer) GetPeers(context.Context, *empty.Empty) (*GetPeersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPeers not implemented")
+}
+func (UnimplementedTrackerServiceServer) GetPeersForFile(context.Context, *GetPeersForFileRequest) (*GetPeersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPeersForFile not implemented")
+}
+func (UnimplementedTrackerServiceServer) UpdatePeer(context.Context, *UpdatePeerRequest) (*UpdatePeerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdatePeer not implemented")
 }
 func (UnimplementedTrackerServiceServer) mustEmbedUnimplementedTrackerServiceServer() {}
 func (UnimplementedTrackerServiceServer) testEmbeddedByValue()                        {}
@@ -173,6 +205,42 @@ func _TrackerService_GetPeers_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TrackerService_GetPeersForFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPeersForFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TrackerServiceServer).GetPeersForFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TrackerService_GetPeersForFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TrackerServiceServer).GetPeersForFile(ctx, req.(*GetPeersForFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TrackerService_UpdatePeer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdatePeerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TrackerServiceServer).UpdatePeer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TrackerService_UpdatePeer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TrackerServiceServer).UpdatePeer(ctx, req.(*UpdatePeerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TrackerService_ServiceDesc is the grpc.ServiceDesc for TrackerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -191,6 +259,14 @@ var TrackerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPeers",
 			Handler:    _TrackerService_GetPeers_Handler,
+		},
+		{
+			MethodName: "GetPeersForFile",
+			Handler:    _TrackerService_GetPeersForFile_Handler,
+		},
+		{
+			MethodName: "UpdatePeer",
+			Handler:    _TrackerService_UpdatePeer_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

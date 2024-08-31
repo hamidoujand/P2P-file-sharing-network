@@ -71,6 +71,58 @@ func (s *Service) UnRegisterPeer(ctx context.Context, in *pb.UnRegisterPeerReque
 func (s *Service) GetPeers(ctx context.Context, _ *empty.Empty) (*pb.GetPeersResponse, error) {
 	peers := s.store.GetAllPeers()
 
+	buffPeers := toBufferPeers(peers)
+	return &pb.GetPeersResponse{
+		Peers: buffPeers,
+	}, nil
+}
+
+// GetPeersForFile will returns all peers that contain the requested file.
+func (s *Service) GetPeersForFile(ctx context.Context, in *pb.GetPeersForFileRequest) (*pb.GetPeersResponse, error) {
+	meta := peerstore.FileMetadata{
+		Name:         in.File.GetName(),
+		Size:         in.File.GetSize(),
+		Mime:         in.File.GetFileType(),
+		Checksum:     in.File.GetChecksum(),
+		LastModified: in.File.LastModified.AsTime(),
+	}
+
+	peers := s.store.GetPeersForFile(meta)
+	buffPeers := toBufferPeers(peers)
+
+	resp := pb.GetPeersResponse{
+		Peers: buffPeers,
+	}
+	return &resp, nil
+}
+
+// UpdatePeer will update the files related to a peer.
+func (s *Service) UpdatePeer(ctx context.Context, in *pb.UpdatePeerRequest) (*pb.UpdatePeerResponse, error) {
+	//get the peer
+	_, err := s.store.GetPeerByHost(in.GetHost())
+	if err != nil {
+		if errors.Is(err, peerstore.ErrPeerNotFound) {
+			return nil, status.Errorf(codes.NotFound, "peer %s, not found", in.GetHost())
+		}
+		//internal
+		return nil, status.Error(codes.Internal, codes.Internal.String())
+	}
+
+	files := make([]peerstore.FileMetadata, len(in.GetFiles()))
+	for i, f := range in.GetFiles() {
+		files[i] = peerstore.FileMetadata{
+			Name:         f.GetName(),
+			Size:         f.GetSize(),
+			Mime:         f.GetFileType(),
+			Checksum:     f.GetChecksum(),
+			LastModified: f.LastModified.AsTime(),
+		}
+	}
+	s.store.UpdatePeer(in.GetHost(), files)
+	return &pb.UpdatePeerResponse{StatusCode: uint32(codes.OK), Message: codes.OK.String()}, nil
+}
+
+func toBufferPeers(peers []peerstore.Peer) []*pb.Peer {
 	buffPeers := make([]*pb.Peer, len(peers))
 	for i, peer := range peers {
 		buffPeer := pb.Peer{}
@@ -89,8 +141,5 @@ func (s *Service) GetPeers(ctx context.Context, _ *empty.Empty) (*pb.GetPeersRes
 		buffPeer.Files = buffFiles
 		buffPeers[i] = &buffPeer
 	}
-
-	return &pb.GetPeersResponse{
-		Peers: buffPeers,
-	}, nil
+	return buffPeers
 }
