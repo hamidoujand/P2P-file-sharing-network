@@ -150,6 +150,16 @@ func TestGetPeers(t *testing.T) {
 		if !found {
 			t.Fatalf("expected %s to be in fetched peers", peer)
 		}
+	}
 
+	for _, peer := range fetchedPeers.Peers {
+		expectedFile := peers[peer.Host]
+		found := slices.ContainsFunc(peer.Files, func(f *pb.File) bool {
+			return expectedFile.Name == f.Name && expectedFile.FileType == f.FileType
+		})
+
+		if !found {
+			t.Fatalf("expected file %s to be inside of peers list", expectedFile.Name)
+		}
 	}
 }
