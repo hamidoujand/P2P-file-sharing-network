@@ -9,12 +9,10 @@ import (
 	"syscall"
 
 	"github.com/hamidoujand/P2P-file-sharing-network/peer/pb"
+	"github.com/hamidoujand/P2P-file-sharing-network/peer/service"
+	"github.com/hamidoujand/P2P-file-sharing-network/peer/store"
 	"google.golang.org/grpc"
 )
-
-type service struct {
-	pb.UnimplementedPeerServiceServer
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -30,7 +28,11 @@ func run() error {
 	}
 
 	server := grpc.NewServer()
-	pb.RegisterPeerServiceServer(server, &service{})
+
+	store := store.New()
+	service := service.New(store)
+
+	pb.RegisterPeerServiceServer(server, service)
 
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, syscall.SIGTERM, syscall.SIGINT)
