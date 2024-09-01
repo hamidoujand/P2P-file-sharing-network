@@ -10,8 +10,7 @@ tidy:
 
 gen:
 	protoc --go_out=. --go-grpc_out=. --proto_path=proto   proto/tracker.proto
-	protoc --go_out=./peer1 --go-grpc_out=./peer1 --proto_path=proto proto/peer.proto
-	protoc --go_out=./peer2 --go-grpc_out=./peer2 --proto_path=proto proto/peer.proto
+	protoc --go_out=./peer --go-grpc_out=./peer --proto_path=proto proto/peer.proto
 
 
 

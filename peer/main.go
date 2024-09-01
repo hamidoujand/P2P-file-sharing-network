@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/hamidoujand/P2P-file-sharing-network/peer1/pb"
+	"github.com/hamidoujand/P2P-file-sharing-network/peer/pb"
 	"google.golang.org/grpc"
 )
 
