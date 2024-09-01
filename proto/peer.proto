@@ -1,17 +1,66 @@
 syntax = "proto3";
 
+
 package proto;
+
+import "google/protobuf/timestamp.proto";
 
 option go_package="./pb"; 
 
-message RequestBody {
-  string name = 1;
-}
-
-message ResponseBody {
-  string greet =1;
-}
 
 service PeerService {
-  rpc HelloWorld(RequestBody) returns (ResponseBody) {};
+  // Ping RPC to check if the peer is online and responsive.
+  rpc Ping(PingRequest) returns (PingResponse);  
+  // Check if a specific file exists on the peer
+  rpc CheckFileExistence(CheckFileExistenceRequest) returns (CheckFileExistenceResponse);
+  // Get the metadata for a filename.
+  rpc GetFileMetadata(GetFileMetadataRequest) returns (GetFileMetadataResponse); 
+}
+
+message PingRequest{
+  // Optional: You could include a timestamp or a simple string message.
+  string message=1;
+}
+
+message PingResponse{
+  // Indicates the status of the ping, could be "OK" or some other status.
+  string status = 1;
+
+  // Optional: You could include the original message or timestamp for debugging
+  string message = 2;
+
+  // Optional: Server timestamp or some identifier to track the response time.
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message CheckFileExistenceRequest{
+  // The name of the file to check for existence
+  string name=1;
+}
+
+message CheckFileExistenceResponse{
+  bool exists=1;
+  FileMetadata metadata=2; 
+}
+
+message FileMetadata {
+  // The name of the file
+  string name = 1; 
+  // The size of the file in bytes      
+  uint64 size = 2; 
+  // The checksum to validate integrity of the file.      
+  string checksum = 3;
+  // Last modification time.        
+  google.protobuf.Timestamp last_modified = 4;
+  // File Type.   
+  string file_type = 5;       
+}
+
+message GetFileMetadataRequest{
+  string name=1;
+  string file_type=2;
+}
+
+message GetFileMetadataResponse{
+  FileMetadata metadata=1;
 }

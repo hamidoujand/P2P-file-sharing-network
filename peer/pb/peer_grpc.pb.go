@@ -19,14 +19,21 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PeerService_HelloWorld_FullMethodName = "/proto.PeerService/HelloWorld"
+	PeerService_Ping_FullMethodName               = "/proto.PeerService/Ping"
+	PeerService_CheckFileExistence_FullMethodName = "/proto.PeerService/CheckFileExistence"
+	PeerService_GetFileMetadata_FullMethodName    = "/proto.PeerService/GetFileMetadata"
 )
 
 // PeerServiceClient is the client API for PeerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PeerServiceClient interface {
-	HelloWorld(ctx context.Context, in *RequestBody, opts ...grpc.CallOption) (*ResponseBody, error)
+	// Ping RPC to check if the peer is online and responsive.
+	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
+	// Check if a specific file exists on the peer
+	CheckFileExistence(ctx context.Context, in *CheckFileExistenceRequest, opts ...grpc.CallOption) (*CheckFileExistenceResponse, error)
+	// Get the metadata for a filename.
+	GetFileMetadata(ctx context.Context, in *GetFileMetadataRequest, opts ...grpc.CallOption) (*GetFileMetadataResponse, error)
 }
 
 type peerServiceClient struct {
@@ -37,10 +44,30 @@ func NewPeerServiceClient(cc grpc.ClientConnInterface) PeerServiceClient {
 	return &peerServiceClient{cc}
 }
 
-func (c *peerServiceClient) HelloWorld(ctx context.Context, in *RequestBody, opts ...grpc.CallOption) (*ResponseBody, error) {
+func (c *peerServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResponseBody)
-	err := c.cc.Invoke(ctx, PeerService_HelloWorld_FullMethodName, in, out, cOpts...)
+	out := new(PingResponse)
+	err := c.cc.Invoke(ctx, PeerService_Ping_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *peerServiceClient) CheckFileExistence(ctx context.Context, in *CheckFileExistenceRequest, opts ...grpc.CallOption) (*CheckFileExistenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckFileExistenceResponse)
+	err := c.cc.Invoke(ctx, PeerService_CheckFileExistence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *peerServiceClient) GetFileMetadata(ctx context.Context, in *GetFileMetadataRequest, opts ...grpc.CallOption) (*GetFileMetadataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFileMetadataResponse)
+	err := c.cc.Invoke(ctx, PeerService_GetFileMetadata_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +78,12 @@ func (c *peerServiceClient) HelloWorld(ctx context.Context, in *RequestBody, opt
 // All implementations must embed UnimplementedPeerServiceServer
 // for forward compatibility.
 type PeerServiceServer interface {
-	HelloWorld(context.Context, *RequestBody) (*ResponseBody, error)
+	// Ping RPC to check if the peer is online and responsive.
+	Ping(context.Context, *PingRequest) (*PingResponse, error)
+	// Check if a specific file exists on the peer
+	CheckFileExistence(context.Context, *CheckFileExistenceRequest) (*CheckFileExistenceResponse, error)
+	// Get the metadata for a filename.
+	GetFileMetadata(context.Context, *GetFileMetadataRequest) (*GetFileMetadataResponse, error)
 	mustEmbedUnimplementedPeerServiceServer()
 }
 
@@ -62,8 +94,14 @@ type PeerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPeerServiceServer struct{}
 
-func (UnimplementedPeerServiceServer) HelloWorld(context.Context, *RequestBody) (*ResponseBody, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method HelloWorld not implemented")
+func (UnimplementedPeerServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (UnimplementedPeerServiceServer) CheckFileExistence(context.Context, *CheckFileExistenceRequest) (*CheckFileExistenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckFileExistence not implemented")
+}
+func (UnimplementedPeerServiceServer) GetFileMetadata(context.Context, *GetFileMetadataRequest) (*GetFileMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFileMetadata not implemented")
 }
 func (UnimplementedPeerServiceServer) mustEmbedUnimplementedPeerServiceServer() {}
 func (UnimplementedPeerServiceServer) testEmbeddedByValue()                     {}
@@ -86,20 +124,56 @@ func RegisterPeerServiceServer(s grpc.ServiceRegistrar, srv PeerServiceServer) {
 	s.RegisterService(&PeerService_ServiceDesc, srv)
 }
 
-func _PeerService_HelloWorld_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestBody)
+func _PeerService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PeerServiceServer).HelloWorld(ctx, in)
+		return srv.(PeerServiceServer).Ping(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PeerService_HelloWorld_FullMethodName,
+		FullMethod: PeerService_Ping_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).HelloWorld(ctx, req.(*RequestBody))
+		return srv.(PeerServiceServer).Ping(ctx, req.(*PingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PeerService_CheckFileExistence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckFileExistenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).CheckFileExistence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PeerService_CheckFileExistence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).CheckFileExistence(ctx, req.(*CheckFileExistenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PeerService_GetFileMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFileMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).GetFileMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PeerService_GetFileMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).GetFileMetadata(ctx, req.(*GetFileMetadataRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -112,8 +186,16 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PeerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "HelloWorld",
-			Handler:    _PeerService_HelloWorld_Handler,
+			MethodName: "Ping",
+			Handler:    _PeerService_Ping_Handler,
+		},
+		{
+			MethodName: "CheckFileExistence",
+			Handler:    _PeerService_CheckFileExistence_Handler,
+		},
+		{
+			MethodName: "GetFileMetadata",
+			Handler:    _PeerService_GetFileMetadata_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
