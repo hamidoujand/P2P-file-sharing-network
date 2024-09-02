@@ -47,13 +47,17 @@ message FileMetadata {
   // The name of the file
   string name = 1; 
   // The size of the file in bytes      
-  uint64 size = 2; 
+  int64 size = 2; 
   // The checksum to validate integrity of the file.      
   string checksum = 3;
   // Last modification time.        
   google.protobuf.Timestamp last_modified = 4;
   // File Type.   
-  string file_type = 5;       
+  string file_type = 5;    
+  // Number of chunks
+  int64 num_chunks=6;
+  // Default chunk size in bytes 
+  int64 default_chunk_size=7;
 }
 
 message GetFileMetadataRequest{

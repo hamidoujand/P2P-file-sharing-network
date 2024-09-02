@@ -41,7 +41,7 @@ func (s *Service) RegisterPeer(ctx context.Context, in *pb.RegisterPeerRequest) 
 
 	s.store.RegisterPeer(in.Host, files)
 
-	return &pb.RegisterPeerResponse{StatusCode: uint32(codes.OK), Message: codes.OK.String()}, nil
+	return &pb.RegisterPeerResponse{StatusCode: int64(codes.OK), Message: codes.OK.String()}, nil
 }
 
 // UnRegisterPeer willl remove a peer from network.
@@ -50,19 +50,19 @@ func (s *Service) UnRegisterPeer(ctx context.Context, in *pb.UnRegisterPeerReque
 	if err != nil {
 		if errors.Is(err, peerstore.ErrPeerNotFound) {
 			return &pb.UnRegisterPeerResponse{
-				StatusCode: uint32(codes.NotFound),
+				StatusCode: int64(codes.NotFound),
 				Message:    codes.NotFound.String(),
 			}, status.Errorf(codes.NotFound, "peer %s not found", in.Host)
 		} else {
 			return &pb.UnRegisterPeerResponse{
-				StatusCode: uint32(codes.Internal),
+				StatusCode: int64(codes.Internal),
 				Message:    codes.Internal.String(),
 			}, status.Error(codes.Internal, err.Error())
 		}
 	}
 
 	return &pb.UnRegisterPeerResponse{
-		StatusCode: uint32(codes.OK),
+		StatusCode: int64(codes.OK),
 		Message:    codes.OK.String(),
 	}, nil
 }
@@ -119,7 +119,7 @@ func (s *Service) UpdatePeer(ctx context.Context, in *pb.UpdatePeerRequest) (*pb
 		}
 	}
 	s.store.UpdatePeer(in.GetHost(), files)
-	return &pb.UpdatePeerResponse{StatusCode: uint32(codes.OK), Message: codes.OK.String()}, nil
+	return &pb.UpdatePeerResponse{StatusCode: int64(codes.OK), Message: codes.OK.String()}, nil
 }
 
 func toBufferPeers(peers []peerstore.Peer) []*pb.Peer {

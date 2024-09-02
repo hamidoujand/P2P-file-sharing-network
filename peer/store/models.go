@@ -9,31 +9,37 @@ import (
 
 // FileMetadata represents the metadata related to file that each peer has.
 type FileMetadata struct {
-	Name         string
-	Size         uint64
-	FileType     string
-	Checksum     string
-	LastModified time.Time
+	Name             string
+	Size             int64
+	FileType         string
+	Checksum         string
+	LastModified     time.Time
+	ChunkNumbers     int64
+	DefaultChunkSize int64
 }
 
 // NewFileMetadata creates a metadata from a protobuff file.
 func NewFileMetadata(file *pb.FileMetadata) FileMetadata {
 	return FileMetadata{
-		Name:         file.GetName(),
-		Size:         file.GetSize(),
-		FileType:     file.GetFileType(),
-		Checksum:     file.GetChecksum(),
-		LastModified: file.LastModified.AsTime(),
+		Name:             file.GetName(),
+		Size:             file.GetSize(),
+		FileType:         file.GetFileType(),
+		Checksum:         file.GetChecksum(),
+		LastModified:     file.LastModified.AsTime(),
+		ChunkNumbers:     file.GetNumChunks(),
+		DefaultChunkSize: DefaultChunkSize,
 	}
 }
 
 // ToProtoBuff creates a *pb.FileMetadata.
 func (fm FileMetadata) ToProtoBuff() *pb.FileMetadata {
 	return &pb.FileMetadata{
-		Name:         fm.Name,
-		Size:         fm.Size,
-		Checksum:     fm.Checksum,
-		LastModified: timestamppb.New(fm.LastModified),
-		FileType:     fm.FileType,
+		Name:             fm.Name,
+		Size:             fm.Size,
+		Checksum:         fm.Checksum,
+		LastModified:     timestamppb.New(fm.LastModified),
+		FileType:         fm.FileType,
+		NumChunks:        fm.ChunkNumbers,
+		DefaultChunkSize: DefaultChunkSize,
 	}
 }

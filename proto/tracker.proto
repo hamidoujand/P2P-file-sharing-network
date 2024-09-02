@@ -24,7 +24,7 @@ service TrackerService {
 
 message File {
   string name = 1;       
-  uint64 size = 2;        // The size of the file in bytes
+  int64 size = 2;        // The size of the file in bytes
   string checksum = 3;        
   google.protobuf.Timestamp last_modified = 4;   
   string file_type = 5;       
@@ -40,7 +40,7 @@ message UpdatePeerRequest{
   string host=2;
 }
 message UpdatePeerResponse{
-  uint32 status_code=1;
+  int64 status_code=1;
   string message=2;
 }
 
@@ -50,7 +50,7 @@ message RegisterPeerRequest{
 }
 
 message RegisterPeerResponse{
-  uint32 status_code=1;
+  int64 status_code=1;
   string message=2; 
 }
 
@@ -59,7 +59,7 @@ message UnRegisterPeerRequest{
 }
 
 message UnRegisterPeerResponse{
-  uint32 status_code=1;
+  int64 status_code=1;
   string message=2;
 }
 

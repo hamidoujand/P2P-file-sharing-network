@@ -111,4 +111,7 @@ func TestGetFileMetadata(t *testing.T) {
 		t.Errorf("fileType= %s, got %s", file.FileType, resp.Metadata.FileType)
 	}
 
+	if resp.Metadata.NumChunks != 1 {
+		t.Errorf("numberOfChunks=%d, got %d", 1, resp.Metadata.NumChunks)
+	}
 }

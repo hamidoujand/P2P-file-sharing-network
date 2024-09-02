@@ -2,10 +2,13 @@ package store
 
 import (
 	"errors"
+	"math"
 	"sync"
 )
 
 var ErrFileNotFound = errors.New("file not found")
+
+const DefaultChunkSize int64 = 1024 * 1024 // 1 MB
 
 // Store represents an in-memory storage for filemetadata
 type Store struct {
@@ -36,6 +39,10 @@ func (s *Store) GetFileMetadata(name string) (FileMetadata, error) {
 func (s *Store) AddFileMetadata(fm FileMetadata) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	//calcuulate the number of chunks
+	numberOfChunks := calculateChunks(fm.Size, DefaultChunkSize)
+	fm.ChunkNumbers = numberOfChunks
+
 	s.store[fm.Name] = fm
 }
 
@@ -73,4 +80,13 @@ func (s *Store) ListFileMetadatas() []FileMetadata {
 		files = append(files, file)
 	}
 	return files
+}
+
+func calculateChunks(filesize int64, chunkSize int64) int64 {
+	if chunkSize == 0 {
+		return 0
+	}
+
+	result := math.Ceil(float64(filesize) / float64(chunkSize))
+	return int64(result)
 }

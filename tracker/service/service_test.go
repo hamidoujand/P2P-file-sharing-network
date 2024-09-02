@@ -38,7 +38,7 @@ func TestRegisterPeer(t *testing.T) {
 		t.Fatalf("expected to get a response: %s", err)
 	}
 
-	if resp.StatusCode != uint32(codes.OK) {
+	if resp.StatusCode != int64(codes.OK) {
 		t.Errorf("code=%d, got %d", codes.OK, resp.StatusCode)
 	}
 }
@@ -66,7 +66,7 @@ func TestUnRegisterPeer(t *testing.T) {
 		t.Fatalf("expected to get a response: %s", err)
 	}
 
-	if resp.StatusCode != uint32(codes.OK) {
+	if resp.StatusCode != int64(codes.OK) {
 		t.Errorf("code=%d, got %d", codes.OK, resp.StatusCode)
 	}
 
@@ -79,7 +79,7 @@ func TestUnRegisterPeer(t *testing.T) {
 		t.Fatalf("expected to unregister peer from network: %s", err)
 	}
 
-	if response.StatusCode != uint32(codes.OK) {
+	if response.StatusCode != int64(codes.OK) {
 		t.Errorf("code= %d, got %d", codes.OK, resp.StatusCode)
 	}
 
@@ -256,7 +256,7 @@ func TestUpdatePeer(t *testing.T) {
 		t.Fatalf("expected to update perr: %s", err)
 	}
 
-	if resp.StatusCode != uint32(codes.OK) {
+	if resp.StatusCode != int64(codes.OK) {
 		t.Fatalf("code=%d, got %d", codes.OK, resp.StatusCode)
 	}
 

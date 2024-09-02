@@ -11,7 +11,7 @@ var ErrPeerNotFound = errors.New("peer not found")
 // FileMetadata represents all required info related to a file on the network.
 type FileMetadata struct {
 	Name         string
-	Size         uint64
+	Size         int64
 	Mime         string
 	Checksum     string
 	LastModified time.Time
