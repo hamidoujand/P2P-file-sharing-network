@@ -9,9 +9,11 @@ tidy:
 	go mod vendor   
 
 gen:
-	protoc --go_out=. --go-grpc_out=. --proto_path=proto   proto/tracker.proto
+	protoc --go_out=./tracker --go-grpc_out=./tracker --proto_path=proto   proto/tracker.proto
 	protoc --go_out=./peer --go-grpc_out=./peer --proto_path=proto proto/peer.proto
-
+	protoc --go_out=./peer --go-grpc_out=./peer --proto_path=proto proto/tracker.proto
+	protoc --go_out=./client --go-grpc_out=./client --proto_path=proto proto/tracker.proto	
+	protoc --go_out=./client --go-grpc_out=./client --proto_path=proto proto/peer.proto	
 
 
 

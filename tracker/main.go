@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/hamidoujand/P2P-file-sharing-network/tracker/pb"
+	"github.com/hamidoujand/P2P-file-sharing-network/tracker/pb/tracker"
 	"github.com/hamidoujand/P2P-file-sharing-network/tracker/peerstore"
 	"github.com/hamidoujand/P2P-file-sharing-network/tracker/service"
 	"google.golang.org/grpc"
@@ -33,7 +33,7 @@ func run() error {
 	service := service.New(store)
 
 	server := grpc.NewServer()
-	pb.RegisterTrackerServiceServer(server, service)
+	tracker.RegisterTrackerServiceServer(server, service)
 
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, syscall.SIGTERM, syscall.SIGINT)

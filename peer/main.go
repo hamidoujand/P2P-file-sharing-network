@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/hamidoujand/P2P-file-sharing-network/peer/pb"
+	"github.com/hamidoujand/P2P-file-sharing-network/peer/pb/peer"
 	"github.com/hamidoujand/P2P-file-sharing-network/peer/service"
 	"github.com/hamidoujand/P2P-file-sharing-network/peer/store"
 	"google.golang.org/grpc"
@@ -30,9 +30,11 @@ func run() error {
 	server := grpc.NewServer()
 
 	store := store.New()
-	service := service.New(store)
+	const defaultChunk int64 = 1024 * 1024 //1MB
 
-	pb.RegisterPeerServiceServer(server, service)
+	service := service.New(store, defaultChunk)
+
+	peer.RegisterPeerServiceServer(server, service)
 
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, syscall.SIGTERM, syscall.SIGINT)

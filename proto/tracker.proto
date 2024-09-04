@@ -3,19 +3,15 @@ syntax = "proto3";
 
 package proto;
 
-import "google/protobuf/empty.proto";
-import "google/protobuf/timestamp.proto";
 
-
-
-option go_package="./tracker/pb"; 
+option go_package="./pb/tracker"; 
 
 
 
 service TrackerService {
   rpc RegisterPeer(RegisterPeerRequest) returns (RegisterPeerResponse);
   rpc UnRegisterPeer(UnRegisterPeerRequest) returns (UnRegisterPeerResponse);
-  rpc GetPeers(google.protobuf.Empty) returns (GetPeersResponse);
+  rpc GetPeers(GetPeersRequest) returns (GetPeersResponse);
   rpc GetPeersForFile(GetPeersForFileRequest) returns (GetPeersResponse);
   rpc UpdatePeer(UpdatePeerRequest) returns (UpdatePeerResponse);
 }
@@ -23,16 +19,17 @@ service TrackerService {
 
 
 message File {
-  string name = 1;       
-  int64 size = 2;        // The size of the file in bytes
-  string checksum = 3;        
-  google.protobuf.Timestamp last_modified = 4;   
-  string file_type = 5;       
+  // name of the file. 
+  string name = 1;    
+  // size of the file in bytes.   
+  int64 size = 2;  
+  // file checksum.   
+  string checksum = 3;               
 }
 
 
 message GetPeersForFileRequest{
-  File file=1;
+  string file_name=1;
 };
 
 message UpdatePeerRequest{
@@ -46,7 +43,7 @@ message UpdatePeerResponse{
 
 message RegisterPeerRequest{
   string host=1;
-  repeated File files=3;
+  repeated File files=2;
 }
 
 message RegisterPeerResponse{
@@ -61,6 +58,11 @@ message UnRegisterPeerRequest{
 message UnRegisterPeerResponse{
   int64 status_code=1;
   string message=2;
+}
+
+
+message GetPeersRequest{
+
 }
 
 message GetPeersResponse{

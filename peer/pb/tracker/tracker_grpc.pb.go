@@ -4,11 +4,10 @@
 // - protoc             v3.12.4
 // source: tracker.proto
 
-package pb
+package tracker
 
 import (
 	context "context"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -33,7 +32,7 @@ const (
 type TrackerServiceClient interface {
 	RegisterPeer(ctx context.Context, in *RegisterPeerRequest, opts ...grpc.CallOption) (*RegisterPeerResponse, error)
 	UnRegisterPeer(ctx context.Context, in *UnRegisterPeerRequest, opts ...grpc.CallOption) (*UnRegisterPeerResponse, error)
-	GetPeers(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetPeersResponse, error)
+	GetPeers(ctx context.Context, in *GetPeersRequest, opts ...grpc.CallOption) (*GetPeersResponse, error)
 	GetPeersForFile(ctx context.Context, in *GetPeersForFileRequest, opts ...grpc.CallOption) (*GetPeersResponse, error)
 	UpdatePeer(ctx context.Context, in *UpdatePeerRequest, opts ...grpc.CallOption) (*UpdatePeerResponse, error)
 }
@@ -66,7 +65,7 @@ func (c *trackerServiceClient) UnRegisterPeer(ctx context.Context, in *UnRegiste
 	return out, nil
 }
 
-func (c *trackerServiceClient) GetPeers(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetPeersResponse, error) {
+func (c *trackerServiceClient) GetPeers(ctx context.Context, in *GetPeersRequest, opts ...grpc.CallOption) (*GetPeersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPeersResponse)
 	err := c.cc.Invoke(ctx, TrackerService_GetPeers_FullMethodName, in, out, cOpts...)
@@ -102,7 +101,7 @@ func (c *trackerServiceClient) UpdatePeer(ctx context.Context, in *UpdatePeerReq
 type TrackerServiceServer interface {
 	RegisterPeer(context.Context, *RegisterPeerRequest) (*RegisterPeerResponse, error)
 	UnRegisterPeer(context.Context, *UnRegisterPeerRequest) (*UnRegisterPeerResponse, error)
-	GetPeers(context.Context, *empty.Empty) (*GetPeersResponse, error)
+	GetPeers(context.Context, *GetPeersRequest) (*GetPeersResponse, error)
 	GetPeersForFile(context.Context, *GetPeersForFileRequest) (*GetPeersResponse, error)
 	UpdatePeer(context.Context, *UpdatePeerRequest) (*UpdatePeerResponse, error)
 	mustEmbedUnimplementedTrackerServiceServer()
@@ -121,7 +120,7 @@ func (UnimplementedTrackerServiceServer) RegisterPeer(context.Context, *Register
 func (UnimplementedTrackerServiceServer) UnRegisterPeer(context.Context, *UnRegisterPeerRequest) (*UnRegisterPeerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnRegisterPeer not implemented")
 }
-func (UnimplementedTrackerServiceServer) GetPeers(context.Context, *empty.Empty) (*GetPeersResponse, error) {
+func (UnimplementedTrackerServiceServer) GetPeers(context.Context, *GetPeersRequest) (*GetPeersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPeers not implemented")
 }
 func (UnimplementedTrackerServiceServer) GetPeersForFile(context.Context, *GetPeersForFileRequest) (*GetPeersResponse, error) {
@@ -188,7 +187,7 @@ func _TrackerService_UnRegisterPeer_Handler(srv interface{}, ctx context.Context
 }
 
 func _TrackerService_GetPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(empty.Empty)
+	in := new(GetPeersRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -200,7 +199,7 @@ func _TrackerService_GetPeers_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: TrackerService_GetPeers_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TrackerServiceServer).GetPeers(ctx, req.(*empty.Empty))
+		return srv.(TrackerServiceServer).GetPeers(ctx, req.(*GetPeersRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

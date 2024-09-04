@@ -3,18 +3,15 @@ package peerstore
 import (
 	"errors"
 	"sync"
-	"time"
 )
 
 var ErrPeerNotFound = errors.New("peer not found")
 
 // FileMetadata represents all required info related to a file on the network.
 type FileMetadata struct {
-	Name         string
-	Size         int64
-	Mime         string
-	Checksum     string
-	LastModified time.Time
+	Name     string
+	Size     int64
+	Checksum string
 }
 
 // Files is a collection of file metadata.
@@ -99,20 +96,17 @@ func (s *Store) GetAllPeers() []Peer {
 }
 
 // GetPeersForFile will return the list of peers that have the requested file.
-func (s *Store) GetPeersForFile(file FileMetadata) []Peer {
+func (s *Store) GetPeersForFile(file string) []Peer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var peers []Peer
 
 	for host, files := range s.store {
-		if meta, ok := files[file.Name]; ok {
-			//additional checks
-			if meta.Mime == file.Mime && meta.Size == file.Size && meta.Checksum == file.Checksum {
-				var p Peer
-				p.Host = host
-				p.Files = append(p.Files, meta)
-				peers = append(peers, p)
-			}
+		if meta, ok := files[file]; ok {
+			var p Peer
+			p.Host = host
+			p.Files = append(p.Files, meta)
+			peers = append(peers, p)
 		}
 	}
 

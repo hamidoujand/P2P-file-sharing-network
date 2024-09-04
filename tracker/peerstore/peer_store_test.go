@@ -4,7 +4,6 @@ import (
 	"errors"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/hamidoujand/P2P-file-sharing-network/tracker/peerstore"
 )
@@ -12,18 +11,14 @@ import (
 func TestPeerStore(t *testing.T) {
 	files := []peerstore.FileMetadata{
 		{
-			Name:         "file1.txt",
-			Size:         10,
-			Mime:         "txt",
-			Checksum:     "some-radom-hash",
-			LastModified: time.Now(),
+			Name:     "file1.txt",
+			Size:     10,
+			Checksum: "some-radom-hash",
 		},
 		{
-			Name:         "file2.txt",
-			Size:         20,
-			Mime:         "txt",
-			Checksum:     "some-radom-hash",
-			LastModified: time.Now(),
+			Name:     "file2.txt",
+			Size:     20,
+			Checksum: "some-radom-hash",
 		},
 	}
 
@@ -51,18 +46,14 @@ func TestPeerStore(t *testing.T) {
 func TestRemovePeer(t *testing.T) {
 	files := []peerstore.FileMetadata{
 		{
-			Name:         "file1.txt",
-			Size:         10,
-			Mime:         "txt",
-			Checksum:     "some-radom-hash",
-			LastModified: time.Now(),
+			Name:     "file1.txt",
+			Size:     10,
+			Checksum: "some-radom-hash",
 		},
 		{
-			Name:         "file2.txt",
-			Size:         20,
-			Mime:         "txt",
-			Checksum:     "some-radom-hash",
-			LastModified: time.Now(),
+			Name:     "file2.txt",
+			Size:     20,
+			Checksum: "some-radom-hash",
 		},
 	}
 
@@ -90,18 +81,14 @@ func TestGetAllPeers(t *testing.T) {
 	store := peerstore.New()
 	peers := map[string]peerstore.FileMetadata{
 		"127.0.0.1:50051": {
-			Name:         "file1.txt",
-			Size:         10,
-			Mime:         "txt",
-			Checksum:     "some-radom-hash",
-			LastModified: time.Now(),
+			Name:     "file1.txt",
+			Size:     10,
+			Checksum: "some-radom-hash",
 		},
 		"198.168.2.1:50031": {
-			Name:         "file2.txt",
-			Size:         20,
-			Mime:         "txt",
-			Checksum:     "some-radom-hash",
-			LastModified: time.Now(),
+			Name:     "file2.txt",
+			Size:     20,
+			Checksum: "some-radom-hash",
 		},
 	}
 

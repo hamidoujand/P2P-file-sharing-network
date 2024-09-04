@@ -5,30 +5,25 @@ import (
 	"reflect"
 	"slices"
 	"testing"
-	"time"
 
-	"github.com/hamidoujand/P2P-file-sharing-network/tracker/pb"
+	"github.com/hamidoujand/P2P-file-sharing-network/tracker/pb/tracker"
 	"github.com/hamidoujand/P2P-file-sharing-network/tracker/peerstore"
 	"github.com/hamidoujand/P2P-file-sharing-network/tracker/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestRegisterPeer(t *testing.T) {
 	store := peerstore.New()
 	service := service.New(store)
 
-	in := pb.RegisterPeerRequest{
+	in := tracker.RegisterPeerRequest{
 		Host: "127.0.0.1:50051",
-		Files: []*pb.File{
+		Files: []*tracker.File{
 			{
-				Name:         "file1.txt",
-				Size:         10,
-				Checksum:     "some-hash",
-				LastModified: timestamppb.New(time.Now()),
-				FileType:     "txt",
+				Name:     "file1.txt",
+				Size:     10,
+				Checksum: "some-hash",
 			},
 		},
 	}
@@ -48,15 +43,13 @@ func TestUnRegisterPeer(t *testing.T) {
 	service := service.New(store)
 
 	host := "127.0.0.1:50051"
-	in := pb.RegisterPeerRequest{
+	in := tracker.RegisterPeerRequest{
 		Host: host,
-		Files: []*pb.File{
+		Files: []*tracker.File{
 			{
-				Name:         "file1.txt",
-				Size:         10,
-				Checksum:     "some-hash",
-				LastModified: timestamppb.New(time.Now()),
-				FileType:     "txt",
+				Name:     "file1.txt",
+				Size:     10,
+				Checksum: "some-hash",
 			},
 		},
 	}
@@ -70,7 +63,7 @@ func TestUnRegisterPeer(t *testing.T) {
 		t.Errorf("code=%d, got %d", codes.OK, resp.StatusCode)
 	}
 
-	input := pb.UnRegisterPeerRequest{
+	input := tracker.UnRegisterPeerRequest{
 		Host: host,
 	}
 
@@ -84,7 +77,7 @@ func TestUnRegisterPeer(t *testing.T) {
 	}
 
 	//not-found network
-	input = pb.UnRegisterPeerRequest{
+	input = tracker.UnRegisterPeerRequest{
 		Host: "0.0.0.0:9000",
 	}
 	_, err = service.UnRegisterPeer(context.Background(), &input)
@@ -102,20 +95,16 @@ func TestUnRegisterPeer(t *testing.T) {
 }
 
 func TestGetPeers(t *testing.T) {
-	peers := map[string]*pb.File{
+	peers := map[string]*tracker.File{
 		"127.0.0.1:50051": {
-			Name:         "file1.txt",
-			Size:         10,
-			FileType:     "txt",
-			Checksum:     "some-radom-hash",
-			LastModified: timestamppb.Now(),
+			Name:     "file1.txt",
+			Size:     10,
+			Checksum: "some-radom-hash",
 		},
 		"198.168.2.1:50031": {
-			Name:         "file2.txt",
-			Size:         20,
-			FileType:     "txt",
-			Checksum:     "some-radom-hash",
-			LastModified: timestamppb.Now(),
+			Name:     "file2.txt",
+			Size:     20,
+			Checksum: "some-radom-hash",
 		},
 	}
 
@@ -124,9 +113,9 @@ func TestGetPeers(t *testing.T) {
 	service := service.New(store)
 
 	for host, file := range peers {
-		in := pb.RegisterPeerRequest{
+		in := tracker.RegisterPeerRequest{
 			Host:  host,
-			Files: []*pb.File{file},
+			Files: []*tracker.File{file},
 		}
 
 		_, err := service.RegisterPeer(context.Background(), &in)
@@ -135,7 +124,7 @@ func TestGetPeers(t *testing.T) {
 		}
 	}
 
-	fetchedPeers, err := service.GetPeers(context.Background(), &emptypb.Empty{})
+	fetchedPeers, err := service.GetPeers(context.Background(), &tracker.GetPeersRequest{})
 	if err != nil {
 		t.Fatalf("expected to get all peers: %s", err)
 	}
@@ -145,7 +134,7 @@ func TestGetPeers(t *testing.T) {
 	}
 
 	for peer := range peers {
-		found := slices.ContainsFunc(fetchedPeers.Peers, func(p *pb.Peer) bool {
+		found := slices.ContainsFunc(fetchedPeers.Peers, func(p *tracker.Peer) bool {
 			return p.Host == peer
 		})
 		if !found {
@@ -155,8 +144,8 @@ func TestGetPeers(t *testing.T) {
 
 	for _, peer := range fetchedPeers.Peers {
 		expectedFile := peers[peer.Host]
-		found := slices.ContainsFunc(peer.Files, func(f *pb.File) bool {
-			return expectedFile.Name == f.Name && expectedFile.FileType == f.FileType
+		found := slices.ContainsFunc(peer.Files, func(f *tracker.File) bool {
+			return expectedFile.Name == f.Name
 		})
 
 		if !found {
@@ -166,25 +155,23 @@ func TestGetPeers(t *testing.T) {
 }
 
 func TestGetPeersForFile(t *testing.T) {
-	meta := pb.File{
-		Name:         "file.txt",
-		Size:         10,
-		FileType:     "txt",
-		Checksum:     "some-checksum",
-		LastModified: timestamppb.Now(),
+	meta := tracker.File{
+		Name:     "file.txt",
+		Size:     10,
+		Checksum: "some-checksum",
 	}
 
 	store := peerstore.New()
 	service := service.New(store)
-	p1 := pb.RegisterPeerRequest{
+	p1 := tracker.RegisterPeerRequest{
 		Host:  "127.0.0.1:9000",
-		Files: []*pb.File{&meta},
+		Files: []*tracker.File{&meta},
 	}
-	p2 := pb.RegisterPeerRequest{
+	p2 := tracker.RegisterPeerRequest{
 		Host:  "127.0.0.1:8000",
-		Files: []*pb.File{&meta},
+		Files: []*tracker.File{&meta},
 	}
-	pp := []*pb.RegisterPeerRequest{&p1, &p2}
+	pp := []*tracker.RegisterPeerRequest{&p1, &p2}
 	for _, p := range pp {
 		_, err := service.RegisterPeer(context.Background(), p)
 		if err != nil {
@@ -192,8 +179,8 @@ func TestGetPeersForFile(t *testing.T) {
 		}
 	}
 
-	req := pb.GetPeersForFileRequest{
-		File: &meta,
+	req := tracker.GetPeersForFileRequest{
+		FileName: meta.Name,
 	}
 	fetchedPeers, err := service.GetPeersForFile(context.Background(), &req)
 	if err != nil {
@@ -215,12 +202,10 @@ func TestGetPeersForFile(t *testing.T) {
 }
 
 func TestUpdatePeer(t *testing.T) {
-	meta := pb.File{
-		Name:         "file.txt",
-		Size:         10,
-		FileType:     "txt",
-		Checksum:     "some-checksum",
-		LastModified: timestamppb.Now(),
+	meta := tracker.File{
+		Name:     "file.txt",
+		Size:     10,
+		Checksum: "some-checksum",
 	}
 
 	store := peerstore.New()
@@ -228,9 +213,9 @@ func TestUpdatePeer(t *testing.T) {
 
 	host := "127.0.0.1:9000"
 
-	p := pb.RegisterPeerRequest{
+	p := tracker.RegisterPeerRequest{
 		Host:  host,
-		Files: []*pb.File{&meta},
+		Files: []*tracker.File{&meta},
 	}
 
 	_, err := service.RegisterPeer(context.Background(), &p)
@@ -239,16 +224,14 @@ func TestUpdatePeer(t *testing.T) {
 	}
 
 	//update it
-	meta2 := pb.File{
-		Name:         "file2.txt",
-		Size:         20,
-		FileType:     "txt",
-		Checksum:     "some-checksum",
-		LastModified: timestamppb.Now(),
+	meta2 := tracker.File{
+		Name:     "file2.txt",
+		Size:     20,
+		Checksum: "some-checksum",
 	}
-	in := &pb.UpdatePeerRequest{
+	in := &tracker.UpdatePeerRequest{
 		Host:  host,
-		Files: []*pb.File{&meta, &meta2},
+		Files: []*tracker.File{&meta, &meta2},
 	}
 
 	resp, err := service.UpdatePeer(context.Background(), in)
