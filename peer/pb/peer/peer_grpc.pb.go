@@ -23,6 +23,7 @@ const (
 	PeerService_CheckFileExistence_FullMethodName = "/proto.PeerService/CheckFileExistence"
 	PeerService_GetFileMetadata_FullMethodName    = "/proto.PeerService/GetFileMetadata"
 	PeerService_DownloadFile_FullMethodName       = "/proto.PeerService/DownloadFile"
+	PeerService_UploadFile_FullMethodName         = "/proto.PeerService/UploadFile"
 )
 
 // PeerServiceClient is the client API for PeerService service.
@@ -37,6 +38,8 @@ type PeerServiceClient interface {
 	GetFileMetadata(ctx context.Context, in *GetFileMetadataRequest, opts ...grpc.CallOption) (*GetFileMetadataResponse, error)
 	// Download File is used to download a file from another peer chunk by chunk.
 	DownloadFile(ctx context.Context, in *DownloadFileRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChunk], error)
+	// UploadFile is used to by client to upload a file into peer.
+	UploadFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadFileChunk, UploadFileResponse], error)
 }
 
 type peerServiceClient struct {
@@ -96,6 +99,19 @@ func (c *peerServiceClient) DownloadFile(ctx context.Context, in *DownloadFileRe
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PeerService_DownloadFileClient = grpc.ServerStreamingClient[FileChunk]
 
+func (c *peerServiceClient) UploadFile(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadFileChunk, UploadFileResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PeerService_ServiceDesc.Streams[1], PeerService_UploadFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadFileChunk, UploadFileResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PeerService_UploadFileClient = grpc.ClientStreamingClient[UploadFileChunk, UploadFileResponse]
+
 // PeerServiceServer is the server API for PeerService service.
 // All implementations must embed UnimplementedPeerServiceServer
 // for forward compatibility.
@@ -108,6 +124,8 @@ type PeerServiceServer interface {
 	GetFileMetadata(context.Context, *GetFileMetadataRequest) (*GetFileMetadataResponse, error)
 	// Download File is used to download a file from another peer chunk by chunk.
 	DownloadFile(*DownloadFileRequest, grpc.ServerStreamingServer[FileChunk]) error
+	// UploadFile is used to by client to upload a file into peer.
+	UploadFile(grpc.ClientStreamingServer[UploadFileChunk, UploadFileResponse]) error
 	mustEmbedUnimplementedPeerServiceServer()
 }
 
@@ -129,6 +147,9 @@ func (UnimplementedPeerServiceServer) GetFileMetadata(context.Context, *GetFileM
 }
 func (UnimplementedPeerServiceServer) DownloadFile(*DownloadFileRequest, grpc.ServerStreamingServer[FileChunk]) error {
 	return status.Errorf(codes.Unimplemented, "method DownloadFile not implemented")
+}
+func (UnimplementedPeerServiceServer) UploadFile(grpc.ClientStreamingServer[UploadFileChunk, UploadFileResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method UploadFile not implemented")
 }
 func (UnimplementedPeerServiceServer) mustEmbedUnimplementedPeerServiceServer() {}
 func (UnimplementedPeerServiceServer) testEmbeddedByValue()                     {}
@@ -216,6 +237,13 @@ func _PeerService_DownloadFile_Handler(srv interface{}, stream grpc.ServerStream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PeerService_DownloadFileServer = grpc.ServerStreamingServer[FileChunk]
 
+func _PeerService_UploadFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PeerServiceServer).UploadFile(&grpc.GenericServerStream[UploadFileChunk, UploadFileResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PeerService_UploadFileServer = grpc.ClientStreamingServer[UploadFileChunk, UploadFileResponse]
+
 // PeerService_ServiceDesc is the grpc.ServiceDesc for PeerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -241,6 +269,11 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "DownloadFile",
 			Handler:       _PeerService_DownloadFile_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "UploadFile",
+			Handler:       _PeerService_UploadFile_Handler,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "peer.proto",

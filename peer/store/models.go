@@ -6,12 +6,9 @@ import (
 
 // FileMetadata represents the metadata related to file that each peer has.
 type FileMetadata struct {
-	Name             string
-	Size             int64
-	FileType         string
-	Checksum         string
-	ChunkNumbers     int64
-	DefaultChunkSize int64
+	Name     string
+	Size     int64
+	Checksum string
 }
 
 // NewFileMetadata creates a metadata from a protobuff file.

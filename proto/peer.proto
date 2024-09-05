@@ -17,6 +17,8 @@ service PeerService {
   rpc GetFileMetadata(GetFileMetadataRequest) returns (GetFileMetadataResponse); 
   // Download File is used to download a file from another peer chunk by chunk. 
   rpc DownloadFile(DownloadFileRequest) returns (stream FileChunk);
+  // UploadFile is used to by client to upload a file into peer. 
+  rpc UploadFile(stream UploadFileChunk) returns (UploadFileResponse);
 }
 
 message PingRequest{
@@ -74,4 +76,20 @@ message FileChunk{
   bytes data = 2;             
   // The total number of chunks for this file
   int32 total_chunks = 3;       
+}
+
+message UploadFileResponse{
+  bool success=1;
+  string message=2;
+}
+
+message UploadFileChunk{
+  // The number of the chunk in the sequence
+  int32 chunk_number = 1;    
+  // The actual chunk data
+  bytes data = 2;             
+  // The total number of chunks for this file
+  int32 total_chunks = 3;    
+  // FileName is the name of the file
+  string file_name=4;   
 }

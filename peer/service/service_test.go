@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -46,7 +48,6 @@ func TestCheckFileExistence(t *testing.T) {
 	file := store.FileMetadata{
 		Name:     "file.txt",
 		Size:     12,
-		FileType: "txt",
 		Checksum: "some-checksum",
 	}
 	s.AddFileMetadata(file)
@@ -96,7 +97,6 @@ func TestGetFileMetadata(t *testing.T) {
 	file := store.FileMetadata{
 		Name:     "file.txt",
 		Size:     12,
-		FileType: "txt",
 		Checksum: "some-checksum",
 	}
 
@@ -313,4 +313,117 @@ func TestConcurrentDownload(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func TestUploadFile(t *testing.T) {
+	const defaultChunkSize = 10 * 1024
+	lis := bufconn.Listen(1024 * 1024) //buffered conn
+	server := grpc.NewServer()
+	s := store.New()
+
+	service := service.New(s, defaultChunkSize)
+
+	peer.RegisterPeerServiceServer(server, service)
+
+	go func() {
+		err := server.Serve(lis)
+		if err != nil {
+			panic("server couldn't start")
+		}
+	}()
+	bufDialer := func(context.Context, string) (net.Conn, error) {
+		return lis.Dial()
+	}
+
+	conn, err := grpc.NewClient("passthrough://bufnet",
+		grpc.WithContextDialer(bufDialer),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+
+	if err != nil {
+		t.Fatalf("failed to create a client connection: %s", err)
+	}
+
+	//use the conn to create a client
+	peerClient := peer.NewPeerServiceClient(conn)
+
+	bs := make([]byte, 100*1024) // our buffer to read random data into it.
+	n, err := rand.Read(bs)
+	if err != nil {
+		t.Fatalf("generate random data: %s", err)
+	}
+
+	var buff bytes.Buffer
+	_, err = hex.NewEncoder(&buff).Write(bs[:n])
+	if err != nil {
+		t.Fatalf("failed to encode random bytes into hex: %s", err)
+	}
+
+	hash := sha256.New()
+	_, err = hash.Write(buff.Bytes())
+	if err != nil {
+		t.Fatalf("failed to write hash: %s", err)
+	}
+	checksum := fmt.Sprintf("%X", hash.Sum(nil))
+	stream, err := peerClient.UploadFile(context.Background())
+	if err != nil {
+		t.Fatalf("failed to create stream: %s", err)
+	}
+	filename := "file2.txt"
+	totalChunks := ((buff.Len() + defaultChunkSize - 1) / defaultChunkSize)
+	chunk := make([]byte, defaultChunkSize)
+
+	for {
+		n, err := buff.Read(chunk)
+		if err == io.EOF {
+			break
+		}
+		var chunkNumber int
+
+		chunk := peer.UploadFileChunk{
+			ChunkNumber: int32(chunkNumber),
+			TotalChunks: int32(totalChunks),
+			FileName:    filename,
+			Data:        chunk[:n],
+		}
+
+		if err := stream.Send(&chunk); err != nil {
+			t.Fatalf("failed to send chunk[%d]: %s", chunkNumber, err)
+		}
+		chunkNumber++
+
+	}
+
+	//close stream
+	resp, err := stream.CloseAndRecv()
+	if err != nil {
+		t.Fatalf("failed to close stream: %s", err)
+	}
+
+	if !resp.Success {
+		t.Fatal("expected the response to be a success")
+	}
+
+	//check file existence
+	meta, err := service.GetFileMetadata(context.Background(), &peer.GetFileMetadataRequest{
+		Name: filename,
+	})
+	if err != nil {
+		t.Fatalf("expected to get the file metadata: %s", err)
+	}
+	if meta.Metadata.Name != filename {
+		t.Fatalf("name=%s, got %s", filename, meta.Metadata.Name)
+	}
+
+	if meta.Metadata.Checksum != checksum {
+		t.Fatalf("checksum=[%s], got [%s]", checksum, meta.Metadata.Checksum)
+	}
+
+	t.Cleanup(func() {
+		//remove file
+		path := path.Join("..", "static", filename)
+		if err := os.Remove(path); err != nil {
+			t.Fatalf("expected to remove the file[%s]: %s", filename, err)
+		}
+	})
 }
