@@ -1,16 +1,18 @@
 package service
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/hamidoujand/P2P-file-sharing-network/peer/pb/peer"
+	"github.com/hamidoujand/P2P-file-sharing-network/peer/pb/tracker"
 	"github.com/hamidoujand/P2P-file-sharing-network/peer/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -23,14 +25,114 @@ type Service struct {
 	peer.UnimplementedPeerServiceServer
 	store            *store.Store
 	defaultChunkSize int64
+	trackerClient    tracker.TrackerServiceClient
+	fs               fs.FS
+}
+
+type Config struct {
+	Host             string
+	Store            *store.Store
+	TrackerClient    tracker.TrackerServiceClient
+	DefaultChunkSize int64
+	Fs               fs.FS
 }
 
 // New creates a new rpc service.
-func New(store *store.Store, defaultChunkSize int64) *Service {
-	return &Service{
-		store:            store,
-		defaultChunkSize: defaultChunkSize,
+func New(ctx context.Context, conf *Config) (*Service, error) {
+	//register peer into tracker
+	if conf.Fs == nil {
+		return nil, errors.New("FS can not be nil")
 	}
+
+	var fileMetadata []store.FileMetadata
+
+	//walk the fs
+	walk := func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		//files
+		info, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("info: %w", err)
+		}
+
+		file, err := conf.Fs.Open(path)
+		if err != nil {
+			return fmt.Errorf("open: %w", err)
+		}
+		defer file.Close()
+
+		reader := bufio.NewReader(file)
+		hasher := sha256.New()
+		chunk := make([]byte, 4*1024)
+
+		for {
+			n, err := reader.Read(chunk)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return fmt.Errorf("read: %w", err)
+			}
+
+			hasher.Write(chunk[:n])
+		}
+
+		rawHash := hasher.Sum(nil)
+		checksum := fmt.Sprintf("%X", rawHash)
+
+		fm := store.FileMetadata{
+			Name:     info.Name(),
+			Size:     info.Size(),
+			Checksum: checksum,
+		}
+		//add it into store
+		conf.Store.AddFileMetadata(fm)
+
+		fileMetadata = append(fileMetadata, fm)
+		return nil
+	}
+
+	if err := fs.WalkDir(conf.Fs, ".", walk); err != nil {
+		return nil, fmt.Errorf("walk fs: %w", err)
+	}
+
+	files := make([]*tracker.File, len(fileMetadata))
+	for i, fm := range fileMetadata {
+		files[i] = &tracker.File{
+			Name:     fm.Name,
+			Size:     fm.Size,
+			Checksum: fm.Checksum,
+		}
+	}
+
+	//register peer with tracker
+	in := &tracker.RegisterPeerRequest{
+		Host:  conf.Host,
+		Files: files,
+	}
+	resp, err := conf.TrackerClient.RegisterPeer(ctx, in)
+
+	if err != nil {
+		return nil, fmt.Errorf("rpc:tracker: %w", err)
+	}
+
+	if resp.StatusCode != int64(codes.OK) {
+		return nil, fmt.Errorf("status: %d", resp.StatusCode)
+	}
+
+	return &Service{
+		store:            conf.Store,
+		defaultChunkSize: conf.DefaultChunkSize,
+		trackerClient:    conf.TrackerClient,
+		fs:               conf.Fs,
+	}, nil
 }
 
 // Ping is used to check the health of the server.
@@ -95,25 +197,24 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 		return status.Error(codes.Internal, codes.Internal.String())
 	}
 
-	path := filepath.Join("peer/static", filename)
-	stats, err := os.Stat(path)
+	file, err := s.fs.Open(in.GetFileName())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return status.Errorf(codes.NotFound, "file %s, not found", filename)
 		}
 		return status.Error(codes.Internal, codes.Internal.String())
 	}
-	//open the file
-	file, err := os.Open(path)
-	if err != nil {
-		return status.Errorf(codes.Internal, "unable to open file %s: %s", filename, err.Error())
-	}
 	defer file.Close()
+
+	stats, err := file.Stat()
+	if err != nil {
+		return status.Error(codes.Internal, codes.Internal.String())
+	}
 
 	totalChunks := int32((stats.Size() + s.defaultChunkSize - 1) / s.defaultChunkSize)
 	buffer := make([]byte, s.defaultChunkSize)
 
-	for chunkNumber := int32(0); chunkNumber < totalChunks; chunkNumber++ {
+	for chunkNumber := int32(1); chunkNumber <= totalChunks; chunkNumber++ {
 		readBytes, err := file.Read(buffer)
 		if err != nil {
 			if err == io.EOF {
@@ -138,6 +239,7 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 
 // UploadFile uploads the file chunk by chunk from client.
 func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileChunk, peer.UploadFileResponse]) error {
+
 	var filename string
 	var file *os.File
 	hash := sha256.New()
@@ -179,7 +281,7 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 		if filename == "" {
 			var err error
 			filename = chunk.GetFileName()
-			filepath := path.Join("..", "static", filename)
+			filepath := filepath.Join("peer", "static", filename)
 			file, err = os.Create(filepath)
 			if err != nil {
 				return fmt.Errorf("create file: %w", err)
@@ -198,4 +300,5 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 			return fmt.Errorf("write: %w", err)
 		}
 	}
+
 }
