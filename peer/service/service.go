@@ -16,6 +16,7 @@ import (
 	"github.com/hamidoujand/P2P-file-sharing-network/peer/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -192,9 +193,55 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 	_, err := s.store.GetFileMetadata(filename)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
-			return status.Errorf(codes.NotFound, "file %s, not found", filename)
+			//try tracker service
+			in := tracker.GetPeersForFileRequest{
+				FileName: filename,
+			}
+
+			peers, err := s.trackerClient.GetPeersForFile(context.Background(), &in)
+			if err != nil {
+				return fmt.Errorf("get peers for file: %w", err)
+			}
+
+			//not found inside of the network
+			if len(peers.Peers) == 0 {
+				return status.Errorf(codes.NotFound, "file %s, not found", filename)
+			}
+
+			for _, p := range peers.Peers {
+				//need a peer client
+				peerConn, err := grpc.NewClient(p.Host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+				if err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					os.Exit(1)
+				}
+				defer peerConn.Close()
+				peerClient := peer.NewPeerServiceClient(peerConn)
+
+				//ping peer
+				in := peer.PingRequest{
+					Message: "Hi",
+				}
+				resp, err := peerClient.Ping(context.Background(), &in)
+				if err != nil {
+					fmt.Printf("ping[%s] failed: %s", p.Host, err.Error())
+					continue //continue to next peer that has the file
+				}
+				if resp.Status != codes.OK.String() {
+					fmt.Printf("status[%s] not ok: %s", p.Host, resp.Status)
+					continue
+				}
+				//TODO do the rest
+				//get file metadata
+
+				//handle download
+
+				//validate checksum
+			}
+
+		} else {
+			return status.Error(codes.Internal, codes.Internal.String())
 		}
-		return status.Error(codes.Internal, codes.Internal.String())
 	}
 
 	file, err := s.fs.Open(in.GetFileName())
@@ -242,6 +289,7 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 
 	var filename string
 	var file *os.File
+	var bufWriter *bufio.Writer
 	hash := sha256.New()
 
 	for {
@@ -249,6 +297,10 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 		if err == io.EOF {
 			//check the file
 			if file != nil {
+				if err := bufWriter.Flush(); err != nil {
+					return fmt.Errorf("flush: %w", err)
+				}
+
 				//add metadata store
 				stats, err := file.Stat()
 				if err != nil {
@@ -286,6 +338,7 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 			if err != nil {
 				return fmt.Errorf("create file: %w", err)
 			}
+			bufWriter = bufio.NewWriter(file)
 		}
 		target := make([]byte, len(chunk.Data))
 		copy(target, chunk.Data)
@@ -294,11 +347,18 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 		if err != nil {
 			return fmt.Errorf("writing hash: %w", err)
 		}
-		//writing chunks
-		_, err = file.Write(chunk.GetData())
+		//writing chunks, into buffer
+		_, err = bufWriter.Write(chunk.GetData())
 		if err != nil {
 			return fmt.Errorf("write: %w", err)
 		}
 	}
+
+}
+
+//==============================================================================
+// helpers
+
+func download() {
 
 }
