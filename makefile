@@ -22,3 +22,6 @@ gen:
 
 download:
 	go run client/main.go download -filename=file.txt -peer=0.0.0.0:50052
+
+upload:
+	go run client/main.go upload -filename=file.txt -peer=0.0.0.0:50052

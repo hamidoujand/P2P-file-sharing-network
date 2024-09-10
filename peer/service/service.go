@@ -193,6 +193,8 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 	_, err := s.store.GetFileMetadata(filename)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
+			//when the file is not on this peer.
+			fmt.Println("file not found on this peer, trying other peers...")
 			//try tracker service
 			in := tracker.GetPeersForFileRequest{
 				FileName: filename,
@@ -209,11 +211,13 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 			}
 
 			for _, p := range peers.Peers {
+				fmt.Printf("trying to ping peer [%s]\n", p.Host)
 				//need a peer client
+				//TODO: fix here. dynamically connect to other peers.
 				peerConn, err := grpc.NewClient(p.Host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
-					fmt.Fprintln(os.Stderr, err)
-					os.Exit(1)
+					fmt.Printf("failed to dial peer [%s]: %s", p.Host, err)
+					continue
 				}
 				defer peerConn.Close()
 				peerClient := peer.NewPeerServiceClient(peerConn)
@@ -224,25 +228,92 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 				}
 				resp, err := peerClient.Ping(context.Background(), &in)
 				if err != nil {
-					fmt.Printf("ping[%s] failed: %s", p.Host, err.Error())
+					fmt.Printf("ping [%s] failed: %s\n", p.Host, err.Error())
 					continue //continue to next peer that has the file
 				}
 				if resp.Status != codes.OK.String() {
-					fmt.Printf("status[%s] not ok: %s", p.Host, resp.Status)
+					fmt.Printf("status [%s] not ok: %s\n", p.Host, resp.Status)
 					continue
 				}
-				//TODO do the rest
 				//get file metadata
+				getIn := peer.GetFileMetadataRequest{
+					Name: filename,
+				}
+				fm, err := peerClient.GetFileMetadata(context.Background(), &getIn)
+				if err != nil {
+					fmt.Printf("failed to fetch metadata from peer [%s]: %s\n", p.Host, err)
+					continue
+				}
+				//handle download from another peer
+				downloadIn := peer.DownloadFileRequest{
+					FileName: fm.Metadata.GetName(),
+				}
 
-				//handle download
+				anotherPeerStream, err := peerClient.DownloadFile(context.Background(), &downloadIn)
+				if err != nil {
+					fmt.Printf("failed to init download from peer [%s]: %s\n", p.Host, err)
+					continue
+				}
+				path := "peer/static" + "/" + fm.Metadata.GetName()
 
-				//validate checksum
+				file, err := os.Create(path)
+				if err != nil {
+					if !os.IsExist(err) {
+						return fmt.Errorf("create: %w", err)
+					}
+					//reset the seeker, since we redownloadin from another peer
+					file.Truncate(0)
+				}
+
+				bufWriter := bufio.NewWriter(file)
+
+				for {
+					otherPeerChunk, err := anotherPeerStream.Recv()
+					if err == io.EOF {
+						//flush
+						if err := bufWriter.Flush(); err != nil {
+							return fmt.Errorf("flush: %w", err)
+						}
+						//close
+						if err := file.Close(); err != nil {
+							return fmt.Errorf("close: %w", err)
+						}
+
+						//close the client stream as well
+						return nil
+					}
+
+					if err != nil {
+						fmt.Printf("failed to receive chunk [%d]: %s", otherPeerChunk.ChunkNumber, err)
+						continue
+					}
+
+					if _, err := bufWriter.Write(otherPeerChunk.Data); err != nil {
+						return fmt.Errorf("write: %w", err)
+					}
+
+					//also we need to send this chunk to the cli that asked for it
+					chunk := &peer.FileChunk{
+						ChunkNumber: otherPeerChunk.ChunkNumber,
+						Data:        otherPeerChunk.Data,
+						TotalChunks: otherPeerChunk.TotalChunks,
+					}
+
+					if err := stream.Send(chunk); err != nil {
+						return status.Errorf(codes.Internal, "failed to send chunk[%d]: %s", chunk.ChunkNumber, err)
+					}
+				}
 			}
+
+			//end of the loop mean no file with that name in entire network
+			return status.Error(codes.NotFound, codes.NotFound.String())
 
 		} else {
 			return status.Error(codes.Internal, codes.Internal.String())
 		}
 	}
+
+	//when the file is on this peer
 
 	file, err := s.fs.Open(in.GetFileName())
 	if err != nil {
@@ -260,9 +331,10 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 
 	totalChunks := int32((stats.Size() + s.defaultChunkSize - 1) / s.defaultChunkSize)
 	buffer := make([]byte, s.defaultChunkSize)
+	buffReader := bufio.NewReader(file)
 
 	for chunkNumber := int32(1); chunkNumber <= totalChunks; chunkNumber++ {
-		readBytes, err := file.Read(buffer)
+		readBytes, err := buffReader.Read(buffer)
 		if err != nil {
 			if err == io.EOF {
 				break //end of the file.
@@ -353,12 +425,5 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 			return fmt.Errorf("write: %w", err)
 		}
 	}
-
-}
-
-//==============================================================================
-// helpers
-
-func download() {
 
 }

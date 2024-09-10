@@ -3,10 +3,12 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/hamidoujand/P2P-file-sharing-network/client/pb/peer"
 	"google.golang.org/grpc"
@@ -44,17 +46,28 @@ func (df *DownlaodFileCommand) Init(args []string) error {
 func (df *DownlaodFileCommand) Run() error {
 	//actual downlaod logic
 	if df.filename == "" || df.peer == "" {
-		return flag.ErrHelp
+		return errors.New("both 'filename' and 'peer' args are required")
 	}
 	peerConn, err := grpc.NewClient(df.peer, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return fmt.Errorf("new peer client: %w", err)
 	}
 	defer peerConn.Close()
 
 	//peer client
 	peerClient := peer.NewPeerServiceClient(peerConn)
+
+	//ping
+	pingInput := &peer.PingRequest{
+		Message: "Hi",
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	_, err = peerClient.Ping(ctx, pingInput)
+	if err != nil {
+		return fmt.Errorf("ping: %w", err)
+	}
 
 	in := peer.DownloadFileRequest{
 		FileName: df.filename,

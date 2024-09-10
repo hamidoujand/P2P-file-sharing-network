@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net"
 	"os"
 	"testing"
@@ -62,8 +63,8 @@ func TestNewService(t *testing.T) {
 	}
 }
 
+// when peer itself has the file.
 func TestDownloadFile(t *testing.T) {
-
 	const fileSize int64 = 30 * 1024
 	const filename = "file.txt"
 
@@ -116,6 +117,188 @@ func TestDownloadFile(t *testing.T) {
 	if string(receivedData) != hexBytes.String() {
 		t.Fatal("expected the downloaded file to have same content as original file")
 	}
+}
+
+// when peer needs to download file from another peer first.
+func TestPeerToPeerDownload(t *testing.T) {
+	trackerLis := bufconn.Listen(1024 * 1024)
+	peer1Lis := bufconn.Listen(1024 * 1024)
+	peer2Lis := bufconn.Listen(1024 * 1024)
+
+	trackerDialer := func(context.Context, string) (net.Conn, error) {
+		return trackerLis.Dial()
+	}
+
+	peer1Dialer := func(context.Context, string) (net.Conn, error) {
+		return peer1Lis.Dial()
+	}
+
+	peer2Dialer := func(context.Context, string) (net.Conn, error) {
+		return peer2Lis.Dial()
+	}
+
+	trackerConn, err := grpc.NewClient("passthrough://bufnet",
+		grpc.WithContextDialer(trackerDialer),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("failed to create tracker conn: %s", err)
+	}
+	defer trackerConn.Connect()
+
+	peer1Conn, err := grpc.NewClient("passthrough://bufnet",
+		grpc.WithContextDialer(peer1Dialer),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("failed to create peer1 conn: %s", err)
+	}
+	defer peer1Conn.Close()
+
+	peer2Conn, err := grpc.NewClient("passthrough://bufnet",
+		grpc.WithContextDialer(peer2Dialer),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("failed to create peer2 conn: %s", err)
+	}
+	defer peer2Conn.Close()
+
+	filename := "file2.txt"
+	trackerService := trackerServiceMock{
+		peer: &tracker.Peer{
+			Host: peer2Lis.Addr().String(),
+			Files: []*tracker.File{
+				{
+					Name:     filename,
+					Size:     10,
+					Checksum: "some-checksom",
+				},
+			},
+		},
+	}
+
+	trackerServer := grpc.NewServer()
+	peer1Server := grpc.NewServer()
+	peer2Server := grpc.NewServer()
+
+	tracker.RegisterTrackerServiceServer(trackerServer, trackerService)
+	//tracker server
+	go func() {
+		if err := trackerServer.Serve(trackerLis); err != nil {
+			panic(err)
+		}
+	}()
+
+	trackerClient := tracker.NewTrackerServiceClient(trackerConn)
+
+	const defaultChunkSize = 10 * 1024
+	//peer1 does not have the file so empty fn
+	fs1 := fstest.MapFS{}
+	peer1Service, err := service.New(context.Background(), &service.Config{
+		Host:             peer1Lis.Addr().String(),
+		Store:            store.New(),
+		TrackerClient:    trackerClient,
+		DefaultChunkSize: defaultChunkSize,
+		Fs:               fs1,
+	})
+	if err != nil {
+		t.Fatalf("failed to create peer1 service: %s", err)
+	}
+
+	//register peer1
+	peer.RegisterPeerServiceServer(peer1Server, peer1Service)
+
+	go func() {
+		t.Log("peer1 server is running...")
+		if err := peer1Server.Serve(peer1Lis); err != nil {
+			log.Fatalln("peer1 server is dead:", err)
+			panic(err)
+		}
+	}()
+
+	//peer1 client
+	peer1Client := peer.NewPeerServiceClient(peer1Conn)
+
+	//peer2 setups
+
+	//fs needs to have the file
+	file := fstest.MapFile{
+		Data: []byte("this is some test data to download"),
+	}
+
+	fs2 := fstest.MapFS{
+		filename: &file,
+	}
+	//store needs to have the file
+	s := store.New()
+	s.AddFileMetadata(store.FileMetadata{
+		Name:     filename,
+		Size:     int64(len(file.Data)),
+		Checksum: "checksum",
+	})
+
+	fmt.Println("Host1:", peer1Lis.Addr())
+	fmt.Println("Host2:", peer2Lis.Addr())
+
+	peer2Service, err := service.New(context.Background(), &service.Config{
+		Host:             peer2Lis.Addr().String(),
+		Store:            s,
+		TrackerClient:    trackerClient,
+		DefaultChunkSize: defaultChunkSize,
+		Fs:               fs2,
+	})
+	if err != nil {
+		t.Fatalf("failed to create peer2 service: %s", err)
+	}
+	//register peer 2 server
+	peer.RegisterPeerServiceServer(peer2Server, peer2Service)
+	go func() {
+		t.Log("peer2 server is running...")
+		if err := peer2Server.Serve(peer2Lis); err != nil {
+			log.Fatalln("peer2 server is dead:", err)
+		}
+	}()
+
+	//path for the downloaded file from peer2 to be store on peer1
+	path := "peer/static"
+	if err := os.MkdirAll(path, 0755); err != nil {
+		if !os.IsExist(err) {
+			t.Fatalf("failed to create path: %s", err)
+		}
+	}
+
+	in := peer.DownloadFileRequest{
+		FileName: filename,
+	}
+	stream, err := peer1Client.DownloadFile(context.Background(), &in)
+	if err != nil {
+		t.Fatalf("failed to create download stream: %s", err)
+	}
+
+	var buff bytes.Buffer
+	for {
+		chunk, err := stream.Recv()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			t.Fatalf("failed to receive chunk: %s", err)
+		}
+		buff.Write(chunk.Data)
+		fmt.Printf("successfully received: chunk[%d/%d]\n", chunk.ChunkNumber, chunk.TotalChunks)
+	}
+	fmt.Println("WOW")
+
+	t.Cleanup(func() {
+		//remove file
+		path := "peer"
+		if err := os.RemoveAll(path); err != nil {
+			t.Fatalf("expected to remove the file[%s]: %s", filename, err)
+		}
+	})
 }
 
 func TestUploadFile(t *testing.T) {
@@ -317,6 +500,7 @@ func setupPeerService(t *testing.T, fsys fs.FS) peer.PeerServiceServer {
 // mocks
 type trackerServiceMock struct {
 	tracker.UnimplementedTrackerServiceServer
+	peer *tracker.Peer
 }
 
 func (ts trackerServiceMock) RegisterPeer(ctx context.Context, in *tracker.RegisterPeerRequest) (*tracker.RegisterPeerResponse, error) {
@@ -327,10 +511,10 @@ func (ts trackerServiceMock) UnRegisterPeer(ctx context.Context, in *tracker.UnR
 	return &tracker.UnRegisterPeerResponse{StatusCode: int64(codes.OK), Message: codes.OK.String()}, nil
 }
 func (ts trackerServiceMock) GetPeers(ctx context.Context, in *tracker.GetPeersRequest) (*tracker.GetPeersResponse, error) {
-	return &tracker.GetPeersResponse{Peers: []*tracker.Peer{}}, nil
+	return &tracker.GetPeersResponse{Peers: []*tracker.Peer{ts.peer}}, nil
 }
 func (ts trackerServiceMock) GetPeersForFile(ctx context.Context, in *tracker.GetPeersForFileRequest) (*tracker.GetPeersResponse, error) {
-	return &tracker.GetPeersResponse{Peers: []*tracker.Peer{}}, nil
+	return &tracker.GetPeersResponse{Peers: []*tracker.Peer{ts.peer}}, nil
 }
 func (ts trackerServiceMock) UpdatePeer(ctx context.Context, in *tracker.UpdatePeerRequest) (*tracker.UpdatePeerResponse, error) {
 	return &tracker.UpdatePeerResponse{StatusCode: int64(codes.OK), Message: codes.OK.String()}, nil
