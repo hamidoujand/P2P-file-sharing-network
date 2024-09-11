@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -25,7 +26,16 @@ func main() {
 }
 
 func run() error {
-	host := "0.0.0.0:50052"
+	host := os.Getenv("PEER_HOST")
+	if host == "" {
+		return errors.New("environment variable 'PEER_HOST' is required")
+	}
+
+	trackerHost := os.Getenv("TRACKER_ADDR")
+	if trackerHost == "" {
+		return errors.New("environment variable 'TRACKER_ADDR' is required")
+	}
+
 	listener, err := net.Listen("tcp", host)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
@@ -36,20 +46,19 @@ func run() error {
 	const defaultChunk int64 = 1024 * 1024 //1MB
 
 	//create static dir
-	if err := os.MkdirAll("peer/static", 0755); err != nil {
+	if err := os.MkdirAll("static/", 0755); err != nil {
 		if !os.IsExist(err) {
 			return fmt.Errorf("mkidr: %w", err)
 		}
 	}
 
-	trackerAddr := "127.0.0.1:50051"
-	trackerConn, err := grpc.NewClient(trackerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	trackerConn, err := grpc.NewClient(trackerHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("new tracker client: %w", err)
 	}
 	trackerClient := tracker.NewTrackerServiceClient(trackerConn)
 
-	fsys := os.DirFS("peer/static")
+	fsys := os.DirFS("static")
 
 	conf := service.Config{
 		Host:             host,
@@ -71,7 +80,7 @@ func run() error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		log.Println("peer1 listening on:", listener.Addr())
+		log.Println("peer listening on:", listener.Addr())
 		errCh <- server.Serve(listener)
 	}()
 

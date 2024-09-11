@@ -1,0 +1,23 @@
+FROM golang:1.23.0 AS build
+
+# Disable cgo 
+ENV CGO_ENABLED=0
+
+COPY . /service
+
+WORKDIR /service/tracker/
+
+RUN go build -o tracker main.go 
+
+
+# Stage 3: Create the final image
+FROM alpine:3.20
+
+COPY --from=build /service/tracker/tracker /service/tracker
+
+WORKDIR /service
+
+CMD ["./tracker"]
+
+
+

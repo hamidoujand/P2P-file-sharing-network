@@ -28,6 +28,8 @@ type Service struct {
 	defaultChunkSize int64
 	trackerClient    tracker.TrackerServiceClient
 	fs               fs.FS
+	dialer           grpc.DialOption
+	host             string
 }
 
 type Config struct {
@@ -36,6 +38,7 @@ type Config struct {
 	TrackerClient    tracker.TrackerServiceClient
 	DefaultChunkSize int64
 	Fs               fs.FS
+	Dialer           grpc.DialOption
 }
 
 // New creates a new rpc service.
@@ -133,12 +136,14 @@ func New(ctx context.Context, conf *Config) (*Service, error) {
 		defaultChunkSize: conf.DefaultChunkSize,
 		trackerClient:    conf.TrackerClient,
 		fs:               conf.Fs,
+		dialer:           conf.Dialer,
+		host:             conf.Host,
 	}, nil
 }
 
 // Ping is used to check the health of the server.
 func (s *Service) Ping(ctx context.Context, in *peer.PingRequest) (*peer.PingResponse, error) {
-	message := in.GetMessage()
+	message := fmt.Sprintf("peer[%s]: %s", s.host, in.GetMessage())
 	now := timestamppb.Now()
 	out := &peer.PingResponse{
 		Status:    codes.OK.String(),
@@ -170,6 +175,7 @@ func (s *Service) CheckFileExistence(ctx context.Context, in *peer.CheckFileExis
 // GetFileMetadata returns the metadata related to a file or possible error.
 func (s *Service) GetFileMetadata(ctx context.Context, in *peer.GetFileMetadataRequest) (*peer.GetFileMetadataResponse, error) {
 	filename := in.GetName()
+	fmt.Printf("peer[%s] file[%s] fs:[%+v]\n", s.host, filename, s.fs)
 	meta, err := s.store.GetFileMetadata(filename)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
@@ -189,12 +195,20 @@ func (s *Service) GetFileMetadata(ctx context.Context, in *peer.GetFileMetadataR
 func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerStreamingServer[peer.FileChunk]) error {
 	filename := in.GetFileName()
 
+	dialOptions := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+
+	if s.dialer != nil {
+		dialOptions = append(dialOptions, s.dialer)
+	}
+
 	//check the store for metadata
 	_, err := s.store.GetFileMetadata(filename)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
 			//when the file is not on this peer.
-			fmt.Println("file not found on this peer, trying other peers...")
+			fmt.Printf("file not found on peer[%s],trying other peers\n", s.host)
 			//try tracker service
 			in := tracker.GetPeersForFileRequest{
 				FileName: filename,
@@ -209,12 +223,11 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 			if len(peers.Peers) == 0 {
 				return status.Errorf(codes.NotFound, "file %s, not found", filename)
 			}
-
 			for _, p := range peers.Peers {
 				fmt.Printf("trying to ping peer [%s]\n", p.Host)
 				//need a peer client
-				//TODO: fix here. dynamically connect to other peers.
-				peerConn, err := grpc.NewClient(p.Host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+				peerConn, err := grpc.NewClient(p.Host, dialOptions...)
 				if err != nil {
 					fmt.Printf("failed to dial peer [%s]: %s", p.Host, err)
 					continue
@@ -226,6 +239,7 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 				in := peer.PingRequest{
 					Message: "Hi",
 				}
+
 				resp, err := peerClient.Ping(context.Background(), &in)
 				if err != nil {
 					fmt.Printf("ping [%s] failed: %s\n", p.Host, err.Error())
@@ -405,7 +419,7 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 		if filename == "" {
 			var err error
 			filename = chunk.GetFileName()
-			filepath := filepath.Join("peer", "static", filename)
+			filepath := filepath.Join("static", filename)
 			file, err = os.Create(filepath)
 			if err != nil {
 				return fmt.Errorf("create file: %w", err)

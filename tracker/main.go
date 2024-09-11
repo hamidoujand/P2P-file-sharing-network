@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -22,7 +23,12 @@ func main() {
 }
 
 func run() error {
-	listener, err := net.Listen("tcp", ":50051")
+	trackerHost := os.Getenv("TRACKER_HOST")
+	if trackerHost == "" {
+		return errors.New("environment variable 'TRACKER_HOST' is required")
+	}
+
+	listener, err := net.Listen("tcp", trackerHost)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}

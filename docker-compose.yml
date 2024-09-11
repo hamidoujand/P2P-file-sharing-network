@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  tracker:
+    image: tracker
+    container_name: tracker
+    environment:
+      - TRACKER_HOST=:50051
+    ports:
+      - "50051:50051"
+
+  peer1:
+    image: peer
+    container_name: peer1
+    environment:
+      - TRACKER_ADDR=tracker:50051
+      - PEER_HOST=:50052
+    ports:
+      - "50052:50052"
+    volumes:
+      - peer1_data:/service/static 
+    depends_on:
+      - tracker 
+  peer2:
+    image: peer
+    container_name: peer2
+    environment:
+      - TRACKER_ADDR=tracker:50051
+      - PEER_HOST=:50053
+    ports:
+      - "50053:50053"
+    volumes:
+      - peer2_data:/service/static 
+    depends_on:
+      - tracker 
+
+volumes:
+  peer1_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./peer1-data
+
+  peer2_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./peer2-data
+

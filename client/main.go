@@ -23,6 +23,7 @@ func run(args []string) error {
 	supportedCMDs := []cmd.Runner{
 		cmd.NewDownloadFileCommand(),
 		cmd.NewUploadFileCommand(),
+		cmd.NewGetPeersCommand(),
 	}
 
 	subcommand := args[0]
