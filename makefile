@@ -1,11 +1,14 @@
 .PHONY: build tracker peer up
 
 
-run-tracker:
-	go run tracker/main.go 
+GOLANG  := golang:1.23.0
+ALPINE   := alpine:3.20
 
-run-pee1:
-	go run peer1/main.go
+### Downlaod images 
+docker-pull:
+	docker pull $(GOLANG) & \
+	docker pull $(ALPINE) & \
+	wait;
 
 tidy:
 	go mod tidy 
