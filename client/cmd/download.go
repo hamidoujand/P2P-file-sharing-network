@@ -75,14 +75,6 @@ func (df *DownlaodFileCommand) Run() error {
 
 	stream, err := peerClient.DownloadFile(context.Background(), &in)
 	if err != nil {
-		status, ok := status.FromError(err)
-		if !ok {
-			return err
-		}
-		if status.Code() == codes.NotFound {
-			return fmt.Errorf("file [%s] not found in the network", df.filename)
-		}
-
 		return fmt.Errorf("download file: %w", err)
 	}
 
@@ -117,6 +109,21 @@ func (df *DownlaodFileCommand) Run() error {
 		}
 
 		if err != nil {
+			//remove the file
+			if err := os.Remove("client/static/" + df.filename); err != nil {
+				if !os.IsNotExist(err) {
+					return fmt.Errorf("remove: %w", err)
+				}
+			}
+
+			status, ok := status.FromError(err)
+			if !ok {
+				return fmt.Errorf("fromError: %w", err)
+			}
+
+			if status.Code() == codes.NotFound {
+				return fmt.Errorf("file [%s] not found in network", df.filename)
+			}
 			//something went wrong
 			return fmt.Errorf("recv: %w", err)
 		}

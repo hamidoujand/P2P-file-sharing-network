@@ -175,7 +175,6 @@ func (s *Service) CheckFileExistence(ctx context.Context, in *peer.CheckFileExis
 // GetFileMetadata returns the metadata related to a file or possible error.
 func (s *Service) GetFileMetadata(ctx context.Context, in *peer.GetFileMetadataRequest) (*peer.GetFileMetadataResponse, error) {
 	filename := in.GetName()
-	fmt.Printf("peer[%s] file[%s] fs:[%+v]\n", s.host, filename, s.fs)
 	meta, err := s.store.GetFileMetadata(filename)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
@@ -195,20 +194,12 @@ func (s *Service) GetFileMetadata(ctx context.Context, in *peer.GetFileMetadataR
 func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerStreamingServer[peer.FileChunk]) error {
 	filename := in.GetFileName()
 
-	dialOptions := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
-
-	if s.dialer != nil {
-		dialOptions = append(dialOptions, s.dialer)
-	}
-
 	//check the store for metadata
 	_, err := s.store.GetFileMetadata(filename)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
 			//when the file is not on this peer.
-			fmt.Printf("file not found on peer[%s],trying other peers\n", s.host)
+			fmt.Printf("file [%s] not found on peer[%s]\n", filename, s.host)
 			//try tracker service
 			in := tracker.GetPeersForFileRequest{
 				FileName: filename,
@@ -216,18 +207,20 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 
 			peers, err := s.trackerClient.GetPeersForFile(context.Background(), &in)
 			if err != nil {
-				return fmt.Errorf("get peers for file: %w", err)
+				return status.Errorf(codes.Internal, "get peers for file: %s", err)
+			}
+			if len(peers.Peers) == 0 {
+				//not found in entire network
+				fmt.Printf("file [%s] not found in entire network\n", filename)
+				return status.Errorf(codes.NotFound, "file [%s] not found on entire network", filename)
 			}
 
-			//not found inside of the network
-			if len(peers.Peers) == 0 {
-				return status.Errorf(codes.NotFound, "file %s, not found", filename)
-			}
+			fmt.Printf("total number of peers that have file[%s]: %d\n", filename, len(peers.Peers))
+
 			for _, p := range peers.Peers {
 				fmt.Printf("trying to ping peer [%s]\n", p.Host)
 				//need a peer client
-
-				peerConn, err := grpc.NewClient(p.Host, dialOptions...)
+				peerConn, err := grpc.NewClient(p.Host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					fmt.Printf("failed to dial peer [%s]: %s", p.Host, err)
 					continue
@@ -268,15 +261,15 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 					fmt.Printf("failed to init download from peer [%s]: %s\n", p.Host, err)
 					continue
 				}
-				path := "peer/static" + "/" + fm.Metadata.GetName()
+				path := "static" + "/" + fm.Metadata.GetName()
 
 				file, err := os.Create(path)
 				if err != nil {
 					if !os.IsExist(err) {
-						return fmt.Errorf("create: %w", err)
+						return status.Errorf(codes.Internal, "create: %s", err)
 					}
 					//reset the seeker, since we redownloadin from another peer
-					file.Truncate(0)
+					file.Seek(0, 0)
 				}
 
 				bufWriter := bufio.NewWriter(file)
@@ -286,11 +279,40 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 					if err == io.EOF {
 						//flush
 						if err := bufWriter.Flush(); err != nil {
-							return fmt.Errorf("flush: %w", err)
+							return status.Errorf(codes.Internal, "flush: %s", err)
 						}
 						//close
 						if err := file.Close(); err != nil {
-							return fmt.Errorf("close: %w", err)
+							return status.Errorf(codes.Internal, "close: %s", err)
+						}
+
+						sfm := store.FileMetadata{
+							Name:     fm.Metadata.GetName(),
+							Size:     fm.Metadata.GetSize(),
+							Checksum: fm.GetMetadata().GetChecksum(),
+						}
+						//save metadata for this file into the store.
+						s.store.AddFileMetadata(sfm)
+
+						//update this peer on tracker
+						fileMetas := s.store.ListFileMetadatas()
+						trackerFiles := make([]*tracker.File, len(fileMetas))
+						for i, fm := range fileMetas {
+							trackerFiles[i] = &tracker.File{
+								Name:     fm.Name,
+								Size:     fm.Size,
+								Checksum: fm.Checksum,
+							}
+						}
+
+						updatePeerReq := &tracker.UpdatePeerRequest{
+							Host:  s.host, //the current peer
+							Files: trackerFiles,
+						}
+						_, err := s.trackerClient.UpdatePeer(context.Background(), updatePeerReq)
+						if err != nil {
+							//log the error since that does not concerns the end user
+							fmt.Printf("peer[%s] failed to update it's state in tracker: %s", s.host, err.Error())
 						}
 
 						//close the client stream as well
@@ -303,7 +325,7 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 					}
 
 					if _, err := bufWriter.Write(otherPeerChunk.Data); err != nil {
-						return fmt.Errorf("write: %w", err)
+						return status.Errorf(codes.Internal, "write: %s", err)
 					}
 
 					//also we need to send this chunk to the cli that asked for it
@@ -318,17 +340,13 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 					}
 				}
 			}
-
-			//end of the loop mean no file with that name in entire network
-			return status.Error(codes.NotFound, codes.NotFound.String())
-
 		} else {
 			return status.Error(codes.Internal, codes.Internal.String())
 		}
 	}
 
 	//when the file is on this peer
-
+	fmt.Printf("file [%s] is on this peer\n", filename)
 	file, err := s.fs.Open(in.GetFileName())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -401,6 +419,28 @@ func (s *Service) UploadFile(stream grpc.ClientStreamingServer[peer.UploadFileCh
 
 				//save metadata for this file
 				s.store.AddFileMetadata(fm)
+
+				//update this peer on tracker
+				fileMetas := s.store.ListFileMetadatas()
+				trackerFiles := make([]*tracker.File, len(fileMetas))
+				for i, fm := range fileMetas {
+					trackerFiles[i] = &tracker.File{
+						Name:     fm.Name,
+						Size:     fm.Size,
+						Checksum: fm.Checksum,
+					}
+				}
+
+				updatePeerReq := &tracker.UpdatePeerRequest{
+					Host:  s.host, //the current peer
+					Files: trackerFiles,
+				}
+				_, err = s.trackerClient.UpdatePeer(context.Background(), updatePeerReq)
+				if err != nil {
+					//log the error since that does not concerns the end user
+					fmt.Printf("peer[%s] failed to update it's state in tracker service: %s", s.host, err.Error())
+				}
+
 				//close it
 				file.Close()
 			}

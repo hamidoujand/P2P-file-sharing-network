@@ -25,10 +25,10 @@ gen:
 #--proto_path=/usr/local/include/google/protobuf
 
 download:
-	go run client/main.go download -filename=file.txt -peer=127.0.0.0:50052
+	go run client/main.go download -filename=file2.txt -peer=127.0.0.0:50052
 
 upload:
-	go run client/main.go upload -filename=file.txt -peer=127.0.0.0:50052
+	go run client/main.go upload -filename=file2.txt -peer=127.0.0.0:50053
 
 get-peers:
 	go run client/main.go peers -tracker=127.0.0.0:50051

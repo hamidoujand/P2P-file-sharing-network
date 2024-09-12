@@ -68,11 +68,11 @@ func (uf *UploadFileCommand) Run() error {
 		return fmt.Errorf("ping: %w", err)
 	}
 
-	path := "client/static" + "/" + uf.filename
+	path := "client/static/" + uf.filename
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("file[%s] not found", uf.filename)
+			return fmt.Errorf("file[%s] not found in 'client/static/<filename>'", uf.filename)
 		}
 		return fmt.Errorf("open: %w", err)
 	}
