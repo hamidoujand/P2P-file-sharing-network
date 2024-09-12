@@ -289,7 +289,7 @@ func (s *Service) DownloadFile(in *peer.DownloadFileRequest, stream grpc.ServerS
 						sfm := store.FileMetadata{
 							Name:     fm.Metadata.GetName(),
 							Size:     fm.Metadata.GetSize(),
-							Checksum: fm.GetMetadata().GetChecksum(),
+							Checksum: fm.Metadata.GetChecksum(),
 						}
 						//save metadata for this file into the store.
 						s.store.AddFileMetadata(sfm)
